@@ -23,16 +23,20 @@ class HabitEntryRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
+    user_id: uuid.UUID
     entry_date: date
     status: str
     created_at: datetime
     updated_at: datetime
+    deleted_at: datetime | None
 
 
 class HabitRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
+    user_id: uuid.UUID
+    challenge_id: uuid.UUID
     title: str
     note: str
     penalty_text: str
@@ -40,6 +44,8 @@ class HabitRead(BaseModel):
     sort_order: int
     is_archived: bool
     created_at: datetime
+    updated_at: datetime
+    deleted_at: datetime | None
     entries: list[HabitEntryRead] = []
 
 
@@ -47,10 +53,13 @@ class ChallengeRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
+    user_id: uuid.UUID
     month: int
     year: int
     start_date: date
     end_date: date
     status: str
     created_at: datetime
+    updated_at: datetime
+    deleted_at: datetime | None
     habits: list[HabitRead] = []

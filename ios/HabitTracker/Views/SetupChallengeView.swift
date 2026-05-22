@@ -10,6 +10,8 @@ private struct DraftHabit: Identifiable {
 
 struct SetupChallengeView: View {
     @Environment(\.modelContext) private var modelContext
+    @Query(sort: \AppUser.createdAt)
+    private var users: [AppUser]
 
     @State private var selectedDate = Date()
     @State private var draftHabits: [DraftHabit] = [
@@ -130,11 +132,13 @@ struct SetupChallengeView: View {
             year: year,
             startDate: startDate,
             endDate: endDate,
-            status: .active
+            status: .active,
+            user: users.first
         )
 
         for (index, draft) in draftHabits.enumerated() {
             let habit = Habit(
+                userId: users.first?.id,
                 title: draft.title.trimmingCharacters(in: .whitespacesAndNewlines),
                 penaltyText: draft.penaltyText.trimmingCharacters(in: .whitespacesAndNewlines),
                 colorHex: draft.colorHex,

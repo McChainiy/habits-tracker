@@ -219,7 +219,12 @@ struct MonthDashboardView: View {
         if let existing = entry(for: habit, on: normalizedDate) {
             existing.status = status
         } else {
-            let entry = HabitEntry(entryDate: normalizedDate, status: status, habit: habit)
+            let entry = HabitEntry(
+                userId: challenge.user?.id ?? habit.userId,
+                entryDate: normalizedDate,
+                status: status,
+                habit: habit
+            )
             habit.entries.append(entry)
             modelContext.insert(entry)
         }

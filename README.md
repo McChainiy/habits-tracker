@@ -67,3 +67,22 @@ make docker-migrate
 - Alembic
 
 Backend нужен для следующего этапа: аккаунты, синхронизация и история между устройствами.
+
+## Sync API
+
+Данные принадлежат пользователю. На текущем этапе используется dev-заголовок:
+
+```bash
+X-User-Id: <user_uuid>
+```
+
+Основные endpoints:
+
+```text
+POST /api/v1/users
+GET  /api/v1/users/me
+GET  /api/v1/sync/changes?since=<iso_datetime>
+POST /api/v1/sync/push
+```
+
+Синхронизация основана на `updated_at`: клиент запрашивает изменения после последнего `server_timestamp`, а локальные изменения отправляет через `sync/push`. Удаления передаются через `deleted_at`.

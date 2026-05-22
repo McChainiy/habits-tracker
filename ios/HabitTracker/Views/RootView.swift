@@ -2,6 +2,11 @@ import SwiftData
 import SwiftUI
 
 struct RootView: View {
+    @Environment(\.modelContext) private var modelContext
+
+    @Query(sort: \AppUser.createdAt)
+    private var users: [AppUser]
+
     @Query(sort: \Challenge.createdAt, order: .reverse)
     private var challenges: [Challenge]
 
@@ -18,5 +23,14 @@ struct RootView: View {
             }
         }
         .tint(AppPalette.ink)
+        .onAppear {
+            ensureLocalUser()
+        }
+    }
+
+    private func ensureLocalUser() {
+        guard users.isEmpty else { return }
+        modelContext.insert(AppUser())
+        try? modelContext.save()
     }
 }

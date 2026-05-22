@@ -25,6 +25,39 @@ enum HabitColor: String, CaseIterable, Identifiable {
 }
 
 @Model
+final class AppUser {
+    @Attribute(.unique) var id: UUID
+    var email: String?
+    var displayName: String
+    var createdAt: Date
+    var updatedAt: Date
+    var deletedAt: Date?
+
+    @Relationship(deleteRule: .cascade, inverse: \Challenge.user)
+    var challenges: [Challenge] = []
+
+    init(
+        id: UUID = UUID(),
+        email: String? = nil,
+        displayName: String = "Local user",
+        createdAt: Date = Date(),
+        updatedAt: Date = Date(),
+        deletedAt: Date? = nil
+    ) {
+        self.id = id
+        self.email = email
+        self.displayName = displayName
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+    }
+
+    func touch() {
+        updatedAt = Date()
+    }
+}
+
+@Model
 final class Challenge {
     @Attribute(.unique) var id: UUID
     var month: Int
@@ -33,6 +66,10 @@ final class Challenge {
     var endDate: Date
     var statusRawValue: String
     var createdAt: Date
+    var updatedAt: Date
+    var deletedAt: Date?
+
+    var user: AppUser?
 
     @Relationship(deleteRule: .cascade, inverse: \Habit.challenge)
     var habits: [Habit] = []
@@ -44,7 +81,10 @@ final class Challenge {
         startDate: Date,
         endDate: Date,
         status: ChallengeStatus = .active,
-        createdAt: Date = Date()
+        createdAt: Date = Date(),
+        updatedAt: Date = Date(),
+        deletedAt: Date? = nil,
+        user: AppUser? = nil
     ) {
         self.id = id
         self.month = month
@@ -53,11 +93,17 @@ final class Challenge {
         self.endDate = endDate
         self.statusRawValue = status.rawValue
         self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+        self.user = user
     }
 
     var status: ChallengeStatus {
         get { ChallengeStatus(rawValue: statusRawValue) ?? .draft }
-        set { statusRawValue = newValue.rawValue }
+        set {
+            statusRawValue = newValue.rawValue
+            touch()
+        }
     }
 
     var title: String {
@@ -67,11 +113,16 @@ final class Challenge {
         }
         return date.formatted(.dateTime.month(.wide).year())
     }
+
+    func touch() {
+        updatedAt = Date()
+    }
 }
 
 @Model
 final class Habit {
     @Attribute(.unique) var id: UUID
+    var userId: UUID?
     var title: String
     var note: String
     var penaltyText: String
@@ -79,6 +130,8 @@ final class Habit {
     var sortOrder: Int
     var isArchived: Bool
     var createdAt: Date
+    var updatedAt: Date
+    var deletedAt: Date?
 
     var challenge: Challenge?
 
@@ -87,6 +140,7 @@ final class Habit {
 
     init(
         id: UUID = UUID(),
+        userId: UUID? = nil,
         title: String,
         note: String = "",
         penaltyText: String,
@@ -94,9 +148,12 @@ final class Habit {
         sortOrder: Int,
         isArchived: Bool = false,
         createdAt: Date = Date(),
+        updatedAt: Date = Date(),
+        deletedAt: Date? = nil,
         challenge: Challenge? = nil
     ) {
         self.id = id
+        self.userId = userId
         self.title = title
         self.note = note
         self.penaltyText = penaltyText
@@ -104,33 +161,45 @@ final class Habit {
         self.sortOrder = sortOrder
         self.isArchived = isArchived
         self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
         self.challenge = challenge
+    }
+
+    func touch() {
+        updatedAt = Date()
     }
 }
 
 @Model
 final class HabitEntry {
     @Attribute(.unique) var id: UUID
+    var userId: UUID?
     var entryDate: Date
     var statusRawValue: String
     var createdAt: Date
     var updatedAt: Date
+    var deletedAt: Date?
 
     var habit: Habit?
 
     init(
         id: UUID = UUID(),
+        userId: UUID? = nil,
         entryDate: Date,
         status: HabitEntryStatus,
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
+        deletedAt: Date? = nil,
         habit: Habit? = nil
     ) {
         self.id = id
+        self.userId = userId
         self.entryDate = entryDate
         self.statusRawValue = status.rawValue
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
         self.habit = habit
     }
 
@@ -140,6 +209,10 @@ final class HabitEntry {
             statusRawValue = newValue.rawValue
             updatedAt = Date()
         }
+    }
+
+    func touch() {
+        updatedAt = Date()
     }
 }
 

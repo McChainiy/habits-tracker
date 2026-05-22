@@ -8,6 +8,7 @@ struct HabitTrackerApp: App {
             RootView()
         }
         .modelContainer(for: [
+            AppUser.self,
             Challenge.self,
             Habit.self,
             HabitEntry.self
