@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Месяц привычек</title>
+  <style>
+    :root {
+      --paper: #f6f6f3;
+      --surface: #ffffff;
+      --ink: #20201d;
+      --muted: #74746e;
+      --line: #deded8;
+      --soft: #eeeeea;
+      --accent: #62766a;
+      --accent-soft: #dfe7e1;
+      --warn: #9b6b5f;
+      --warn-soft: #eadfdc;
+      --stone: #8b8c83;
+      --shadow: 0 24px 60px rgba(32, 32, 29, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    .page {
+      min-height: 100vh;
+    }
+
+    .hero {
+      min-height: 78vh;
+      display: grid;
+      grid-template-columns: minmax(0, 0.95fr) minmax(320px, 1.05fr);
+      align-items: center;
+      gap: clamp(28px, 5vw, 72px);
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 26px clamp(20px, 5vw, 56px) 34px;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 14px;
+      margin-bottom: 24px;
+    }
+
+    .brand-mark {
+      width: 18px;
+      height: 18px;
+      border: 1px solid var(--ink);
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 2px;
+      padding: 3px;
+    }
+
+    .brand-mark span {
+      background: var(--ink);
+      opacity: 0.84;
+    }
+
+    h1 {
+      margin: 0;
+      max-width: 560px;
+      font-size: clamp(40px, 5vw, 56px);
+      line-height: 0.96;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+
+    .lead {
+      max-width: 520px;
+      margin: 26px 0 0;
+      color: var(--muted);
+      font-size: clamp(17px, 1.8vw, 20px);
+      line-height: 1.45;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 30px;
+    }
+
+    .button {
+      border: 1px solid var(--ink);
+      background: var(--ink);
+      color: var(--surface);
+      min-height: 46px;
+      padding: 0 18px;
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      font-weight: 560;
+    }
+
+    .button.secondary {
+      background: transparent;
+      color: var(--ink);
+      border-color: var(--line);
+    }
+
+    .notes {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 30px;
+      max-width: 620px;
+    }
+
+    .note {
+      border-top: 1px solid var(--line);
+      padding-top: 14px;
+      color: var(--muted);
+      line-height: 1.45;
+      font-size: 13px;
+    }
+
+    .note strong {
+      display: block;
+      color: var(--ink);
+      font-size: 18px;
+      margin-bottom: 4px;
+      font-weight: 620;
+    }
+
+    .phone-wrap {
+      justify-self: center;
+      width: min(100%, 430px);
+      display: grid;
+      place-items: center;
+    }
+
+    .phone {
+      width: min(78vw, 300px);
+      aspect-ratio: 390 / 780;
+      background: #11110f;
+      border-radius: 38px;
+      padding: 12px;
+      box-shadow: var(--shadow);
+    }
+
+    .screen {
+      height: 100%;
+      background: var(--paper);
+      border-radius: 29px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .status {
+      height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 590;
+    }
+
+    .status-icons {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--ink);
+    }
+
+    .app {
+      flex: 1;
+      padding: 16px 18px 18px;
+      overflow: hidden;
+    }
+
+    .app-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .eyebrow {
+      margin: 0 0 4px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .month-title {
+      margin: 0;
+      font-size: 29px;
+      font-weight: 650;
+      line-height: 1.1;
+    }
+
+    .icon-btn {
+      width: 38px;
+      height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--ink);
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+    }
+
+    .habit-row {
+      display: flex;
+      gap: 8px;
+      overflow: hidden;
+      margin-bottom: 18px;
+    }
+
+    .habit-chip {
+      min-width: 0;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      border-radius: 7px;
+      padding: 8px 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .marker {
+      width: 8px;
+      height: 8px;
+      background: var(--accent);
+      border-radius: 50%;
+      flex: 0 0 auto;
+    }
+
+    .marker.two {
+      background: var(--warn);
+    }
+
+    .marker.three {
+      background: var(--stone);
+    }
+
+    .calendar {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+    }
+
+    .weekdays,
+    .days {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 6px;
+    }
+
+    .weekdays {
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 11px;
+      text-align: center;
+    }
+
+    .day {
+      aspect-ratio: 1;
+      border: 1px solid var(--soft);
+      border-radius: 6px;
+      padding: 5px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--muted);
+      background: #fbfbf9;
+    }
+
+    .day.today {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+      color: var(--ink);
+    }
+
+    .day.empty {
+      opacity: 0;
+    }
+
+    .ticks {
+      display: flex;
+      gap: 2px;
+      align-items: center;
+    }
+
+    .tick {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--line);
+    }
+
+    .tick.done {
+      background: var(--accent);
+    }
+
+    .tick.fail {
+      background: var(--warn);
+    }
+
+    .checkin {
+      margin-top: 14px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+    }
+
+    .checkin h2 {
+      margin: 0 0 12px;
+      font-size: 17px;
+      font-weight: 620;
+    }
+
+    .task {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 0;
+      border-top: 1px solid var(--soft);
+      font-size: 14px;
+    }
+
+    .task:first-of-type {
+      border-top: 0;
+    }
+
+    .choice {
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: var(--paper);
+      display: grid;
+      place-items: center;
+      font-size: 14px;
+    }
+
+    .choice.active {
+      background: var(--accent);
+      color: var(--surface);
+      border-color: var(--accent);
+    }
+
+    .penalty {
+      margin-top: 10px;
+      padding: 11px 12px;
+      background: var(--warn-soft);
+      border: 1px solid #dfcdc8;
+      border-radius: 8px;
+      color: #60433c;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .section {
+      border-top: 1px solid var(--line);
+      padding: 54px clamp(20px, 5vw, 56px);
+    }
+
+    .section-inner {
+      max-width: 1180px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 0.85fr 1.15fr;
+      gap: clamp(28px, 5vw, 72px);
+      align-items: start;
+    }
+
+    .section h2 {
+      margin: 0;
+      font-size: clamp(30px, 4vw, 48px);
+      line-height: 1.05;
+      font-weight: 650;
+    }
+
+    .feature-list {
+      display: grid;
+      gap: 18px;
+    }
+
+    .feature {
+      border-top: 1px solid var(--line);
+      padding-top: 16px;
+      display: grid;
+      grid-template-columns: 30px 1fr;
+      gap: 14px;
+    }
+
+    .feature-number {
+      color: var(--muted);
+      font-size: 14px;
+      padding-top: 2px;
+    }
+
+    .feature h3 {
+      margin: 0 0 6px;
+      font-size: 18px;
+      font-weight: 620;
+    }
+
+    .feature p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    @media (max-width: 860px) {
+      .hero {
+        min-height: auto;
+        grid-template-columns: 1fr;
+        padding-top: 24px;
+      }
+
+      .brand {
+        margin-bottom: 34px;
+      }
+
+      .notes {
+        grid-template-columns: 1fr;
+        margin-top: 42px;
+      }
+
+      .phone-wrap {
+        width: min(100%, 350px);
+      }
+
+      .section-inner {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 430px) {
+      .hero {
+        padding-left: 16px;
+        padding-right: 16px;
+      }
+
+      .actions {
+        display: grid;
+      }
+
+      .button {
+        width: 100%;
+      }
+
+      .phone {
+        width: 100%;
+        border-radius: 34px;
+      }
+
+      .screen {
+        border-radius: 25px;
+      }
+
+      .habit-chip {
+        padding-left: 8px;
+        padding-right: 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div>
+        <div class="brand" aria-label="Месяц привычек">
+          <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
+          <span>Месяц привычек</span>
+        </div>
+        <h1>Пять привычек. Один спокойный месяц.</h1>
+        <p class="lead">Личный календарь, где пользователь заранее выбирает привычки и честное наказание за пропуск. Без давления, рейтингов и лишней мотивационной пыли.</p>
+        <div class="actions">
+          <a class="button" href="#preview">Посмотреть экран</a>
+          <a class="button secondary" href="#logic">Как работает</a>
+        </div>
+        <div class="notes">
+          <div class="note"><strong>до 5</strong> привычек на месяц</div>
+          <div class="note"><strong>31</strong> день простых отметок</div>
+          <div class="note"><strong>1</strong> честный контракт с собой</div>
+        </div>
+      </div>
+
+      <div class="phone-wrap" id="preview" aria-label="Превью приложения">
+        <div class="phone">
+          <div class="screen">
+            <div class="status">
+              <span>9:41</span>
+              <div class="status-icons" aria-hidden="true">
+                <span class="dot"></span>
+                <span class="dot"></span>
+                <span class="dot"></span>
+              </div>
+            </div>
+            <div class="app">
+              <div class="app-top">
+                <div>
+                  <p class="eyebrow">Текущий месяц</p>
+                  <h2 class="month-title">Июнь</h2>
+                </div>
+                <button class="icon-btn" aria-label="Настроить привычки">+</button>
+              </div>
+
+              <div class="habit-row" aria-label="Привычки">
+                <span class="habit-chip"><span class="marker"></span>Чтение</span>
+                <span class="habit-chip"><span class="marker two"></span>Спорт</span>
+                <span class="habit-chip"><span class="marker three"></span>Сон</span>
+              </div>
+
+              <div class="calendar" aria-label="Календарь месяца">
+                <div class="weekdays">
+                  <span>ПН</span><span>ВТ</span><span>СР</span><span>ЧТ</span><span>ПТ</span><span>СБ</span><span>ВС</span>
+                </div>
+                <div class="days">
+                  <div class="day"><span>1</span><div class="ticks"><span class="tick done"></span><span class="tick done"></span><span class="tick done"></span></div></div>
+                  <div class="day"><span>2</span><div class="ticks"><span class="tick done"></span><span class="tick fail"></span><span class="tick done"></span></div></div>
+                  <div class="day"><span>3</span><div class="ticks"><span class="tick done"></span><span class="tick done"></span><span class="tick"></span></div></div>
+                  <div class="day"><span>4</span><div class="ticks"><span class="tick done"></span><span class="tick done"></span><span class="tick done"></span></div></div>
+                  <div class="day"><span>5</span><div class="ticks"><span class="tick done"></span><span class="tick"></span><span class="tick done"></span></div></div>
+                  <div class="day"><span>6</span><div class="ticks"><span class="tick"></span><span class="tick"></span><span class="tick"></span></div></div>
+                  <div class="day"><span>7</span><div class="ticks"><span class="tick"></span><span class="tick"></span><span class="tick"></span></div></div>
+                  <div class="day"><span>8</span><div class="ticks"><span class="tick done"></span><span class="tick done"></span><span class="tick"></span></div></div>
+                  <div class="day"><span>9</span><div class="ticks"><span class="tick done"></span><span class="tick done"></span><span class="tick done"></span></div></div>
+                  <div class="day today"><span>10</span><div class="ticks"><span class="tick done"></span><span class="tick fail"></span><span class="tick"></span></div></div>
+                  <div class="day"><span>11</span><div class="ticks"><span class="tick"></span><span class="tick"></span><span class="tick"></span></div></div>
+                  <div class="day"><span>12</span><div class="ticks"><span class="tick"></span><span class="tick"></span><span class="tick"></span></div></div>
+                  <div class="day"><span>13</span><div class="ticks"><span class="tick"></span><span class="tick"></span><span class="tick"></span></div></div>
+                  <div class="day"><span>14</span><div class="ticks"><span class="tick"></span><span class="tick"></span><span class="tick"></span></div></div>
+                </div>
+              </div>
+
+              <div class="checkin">
+                <h2>Сегодня</h2>
+                <div class="task">
+                  <span>Чтение 20 минут</span>
+                  <span class="choice active" aria-label="Выполнено">✓</span>
+                  <span class="choice" aria-label="Не выполнено">×</span>
+                </div>
+                <div class="task">
+                  <span>Тренировка</span>
+                  <span class="choice" aria-label="Выполнено">✓</span>
+                  <span class="choice active" aria-label="Не выполнено">×</span>
+                </div>
+                <div class="penalty">Наказание: завтра без доставки еды.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="logic">
+      <div class="section-inner">
+        <h2>Минимум действий, максимум ясности.</h2>
+        <div class="feature-list">
+          <article class="feature">
+            <div class="feature-number">01</div>
+            <div>
+              <h3>Месяц задаёт рамку</h3>
+              <p>Пользователь не ведёт бесконечный список целей, а выбирает один месяц и до пяти привычек.</p>
+            </div>
+          </article>
+          <article class="feature">
+            <div class="feature-number">02</div>
+            <div>
+              <h3>Наказание фиксируется заранее</h3>
+              <p>Для каждой привычки есть простой текстовый контракт, который показывается при пропуске.</p>
+            </div>
+          </article>
+          <article class="feature">
+            <div class="feature-number">03</div>
+            <div>
+              <h3>Календарь всегда главный</h3>
+              <p>Первый экран сразу показывает месяц, сегодняшние отметки и состояние привычек без лишних разделов.</p>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
