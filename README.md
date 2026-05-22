@@ -13,7 +13,7 @@
 
 ## Быстрый запуск backend
 
-Для локального backend-окружения используется Docker Compose:
+Для локального backend-окружения используется Docker Compose. В dev-режиме FastAPI и PostgreSQL запускаются в одном контейнере:
 
 ```bash
 docker compose up --build
@@ -25,14 +25,9 @@ docker compose up --build
 curl http://localhost:8001/health
 ```
 
-PostgreSQL доступен на `localhost:5433` с дефолтными значениями из `.env.example`.
-При старте контейнер `api` автоматически выполняет `alembic upgrade head`.
+PostgreSQL доступен только внутри контейнера на `127.0.0.1:5432`; наружу порт базы не пробрасывается. Это убирает конфликты вида `Bind for 0.0.0.0:5433 failed`.
 
-Если Docker Hub недоступен, можно временно указать локальный Python base image:
-
-```bash
-PYTHON_BASE_IMAGE=fastapi-project-api:latest SKIP_REQUIREMENTS_INSTALL=true docker compose up --build
-```
+При старте контейнер `app` поднимает PostgreSQL, ждёт готовности базы и выполняет `alembic upgrade head`.
 
 Полезные команды:
 
@@ -66,7 +61,7 @@ make docker-migrate
 - SQLAlchemy 2 async ORM
 - Alembic
 
-Backend нужен для следующего этапа: аккаунты, синхронизация и история между устройствами.
+Backend нужен для аккаунтов, синхронизации и истории между устройствами.
 
 ## Sync API
 

@@ -1,35 +1,20 @@
 name: habit-tracker
 
 services:
-  db:
-    image: postgres:${POSTGRES_VERSION:-16}
+  app:
+    build:
+      context: ./backend
+      args:
+        POSTGRES_BASE_IMAGE: postgres:${POSTGRES_VERSION:-16}
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-habit_tracker}
       POSTGRES_USER: ${POSTGRES_USER:-habit_tracker}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-habit_tracker}
-    ports:
-      - "${POSTGRES_PORT:-5433}:5432"
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-
-  api:
-    build:
-      context: ./backend
-      args:
-        PYTHON_BASE_IMAGE: ${PYTHON_BASE_IMAGE:-python:3.12-slim}
-        SKIP_REQUIREMENTS_INSTALL: ${SKIP_REQUIREMENTS_INSTALL:-false}
-    environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://habit_tracker:habit_tracker@db:5432/habit_tracker}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://habit_tracker:habit_tracker@127.0.0.1:5432/habit_tracker}
     ports:
       - "${API_PORT:-8001}:8000"
-    depends_on:
-      db:
-        condition: service_healthy
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
       interval: 10s

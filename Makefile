@@ -7,10 +7,10 @@ docker-down:
 	docker compose down
 
 docker-logs:
-	docker compose logs -f api db
+	docker compose logs -f app
 
 docker-migrate:
-	docker compose exec api alembic upgrade head
+	docker compose exec app alembic upgrade head
 
 docker-ps:
 	docker compose ps

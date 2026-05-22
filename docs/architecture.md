@@ -31,7 +31,7 @@ Backend создаётся как готовый каркас для следу�
 - SQLAlchemy async работает с PostgreSQL.
 - Alembic управляет миграциями.
 - API начинается с `health` и базовых операций по челленджам.
-- Docker Compose поднимает API и PostgreSQL для локальной разработки.
+- Docker Compose поднимает API и PostgreSQL в одном dev-контейнере. Наружу пробрасывается только API-порт.
 
 ## Синхронизация
 
