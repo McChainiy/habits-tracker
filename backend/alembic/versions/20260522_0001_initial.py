@@ -16,8 +16,20 @@ down_revision = None
 branch_labels = None
 depends_on = None
 
-challenge_status = sa.Enum("draft", "active", "completed", name="challenge_status")
-habit_entry_status = sa.Enum("done", "failed", "skipped", name="habit_entry_status")
+challenge_status = postgresql.ENUM(
+    "draft",
+    "active",
+    "completed",
+    name="challenge_status",
+    create_type=False,
+)
+habit_entry_status = postgresql.ENUM(
+    "done",
+    "failed",
+    "skipped",
+    name="habit_entry_status",
+    create_type=False,
+)
 
 
 def upgrade() -> None:
