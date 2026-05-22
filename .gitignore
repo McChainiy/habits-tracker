@@ -12,6 +12,7 @@ htmlcov/
 .build/
 DerivedData/
 *.xcuserdata/
+*.xcuserdatad/
 *.xcuserstate
 
 backend/alembic/versions/__pycache__/
