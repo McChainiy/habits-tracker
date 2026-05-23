@@ -14,9 +14,18 @@ enum HabitEntryStatus: String, Codable, CaseIterable {
     case skipped
 }
 
+enum HabitScheduleMode: String, Codable, CaseIterable, Identifiable {
+    case days
+    case count
+
+    var id: String { rawValue }
+}
+
 enum HabitColor: String, CaseIterable, Identifiable {
     case sage = "#62766A"
+    case blue = "#71869C"
     case clay = "#9B6B5F"
+    case sun = "#B99B45"
     case stone = "#8B8C83"
     case ink = "#60717A"
     case moss = "#75815A"
@@ -103,10 +112,16 @@ final class SyncState {
 @Model
 final class Challenge {
     @Attribute(.unique) var id: UUID
+    var customTitle: String = ""
+    var colorHex: String = HabitColor.sage.rawValue
     var month: Int
     var year: Int
     var startDate: Date
     var endDate: Date
+    var durationWeeks: Int = 4
+    var targetWeeks: Int = 3
+    var isTimeless: Bool = false
+    var rewardText: String = ""
     var statusRawValue: String
     var createdAt: Date
     var updatedAt: Date
@@ -119,10 +134,16 @@ final class Challenge {
 
     init(
         id: UUID = UUID(),
+        customTitle: String = "",
+        colorHex: String = HabitColor.sage.rawValue,
         month: Int,
         year: Int,
         startDate: Date,
         endDate: Date,
+        durationWeeks: Int = 4,
+        targetWeeks: Int = 3,
+        isTimeless: Bool = false,
+        rewardText: String = "",
         status: ChallengeStatus = .active,
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
@@ -130,10 +151,16 @@ final class Challenge {
         user: AppUser? = nil
     ) {
         self.id = id
+        self.customTitle = customTitle
+        self.colorHex = colorHex
         self.month = month
         self.year = year
         self.startDate = startDate
         self.endDate = endDate
+        self.durationWeeks = durationWeeks
+        self.targetWeeks = targetWeeks
+        self.isTimeless = isTimeless
+        self.rewardText = rewardText
         self.statusRawValue = status.rawValue
         self.createdAt = createdAt
         self.updatedAt = updatedAt
@@ -150,6 +177,11 @@ final class Challenge {
     }
 
     var title: String {
+        let trimmedTitle = customTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedTitle.isEmpty {
+            return trimmedTitle
+        }
+
         let components = DateComponents(year: year, month: month, day: 1)
         guard let date = Calendar.current.date(from: components) else {
             return "\(month).\(year)"
@@ -170,6 +202,10 @@ final class Habit {
     var note: String
     var penaltyText: String
     var colorHex: String
+    var scheduleModeRawValue: String = HabitScheduleMode.days.rawValue
+    var scheduledWeekdaysRawValue: String = "1,2,3,4,5,6,7"
+    var weeklyTarget: Int = 3
+    var reminderTimesRawValue: String = ""
     var sortOrder: Int
     var isArchived: Bool
     var createdAt: Date
@@ -188,6 +224,10 @@ final class Habit {
         note: String = "",
         penaltyText: String,
         colorHex: String,
+        scheduleMode: HabitScheduleMode = .days,
+        scheduledWeekdays: Set<Int> = Set(1...7),
+        weeklyTarget: Int = 3,
+        reminderTimes: [String] = [],
         sortOrder: Int,
         isArchived: Bool = false,
         createdAt: Date = Date(),
@@ -201,6 +241,10 @@ final class Habit {
         self.note = note
         self.penaltyText = penaltyText
         self.colorHex = colorHex
+        self.scheduleModeRawValue = scheduleMode.rawValue
+        self.scheduledWeekdaysRawValue = Habit.encodeWeekdays(scheduledWeekdays)
+        self.weeklyTarget = weeklyTarget
+        self.reminderTimesRawValue = reminderTimes.joined(separator: ",")
         self.sortOrder = sortOrder
         self.isArchived = isArchived
         self.createdAt = createdAt
@@ -211,6 +255,49 @@ final class Habit {
 
     func touch() {
         updatedAt = Date()
+    }
+
+    var scheduleMode: HabitScheduleMode {
+        get { HabitScheduleMode(rawValue: scheduleModeRawValue) ?? .days }
+        set {
+            scheduleModeRawValue = newValue.rawValue
+            touch()
+        }
+    }
+
+    var scheduledWeekdays: Set<Int> {
+        get {
+            let weekdays = scheduledWeekdaysRawValue
+                .split(separator: ",")
+                .compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
+                .filter { (1...7).contains($0) }
+            return Set(weekdays)
+        }
+        set {
+            scheduledWeekdaysRawValue = Habit.encodeWeekdays(newValue)
+            touch()
+        }
+    }
+
+    var reminderTimes: [String] {
+        get {
+            reminderTimesRawValue
+                .split(separator: ",")
+                .map { String($0.trimmingCharacters(in: .whitespaces)) }
+                .filter { !$0.isEmpty }
+        }
+        set {
+            reminderTimesRawValue = newValue.joined(separator: ",")
+            touch()
+        }
+    }
+
+    static func encodeWeekdays(_ weekdays: Set<Int>) -> String {
+        weekdays
+            .filter { (1...7).contains($0) }
+            .sorted()
+            .map(String.init)
+            .joined(separator: ",")
     }
 }
 

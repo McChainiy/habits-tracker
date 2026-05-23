@@ -1,0 +1,1324 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Недельный челлендж привычек</title>
+  <style>
+    :root {
+      --paper: #f5f4ef;
+      --canvas: #ecebe6;
+      --surface: #ffffff;
+      --ink: #20201d;
+      --muted: #74746e;
+      --line: #deded8;
+      --soft: #eeeeea;
+      --sage: #61766a;
+      --sage-soft: #dfe8e1;
+      --blue: #71869c;
+      --blue-soft: #e2e8ee;
+      --clay: #9b6b5f;
+      --clay-soft: #eadfda;
+      --sun: #b99b45;
+      --sun-soft: #f1e6bf;
+      --shadow: 0 24px 70px rgba(32, 32, 29, 0.13);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--canvas);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    .board {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: minmax(340px, 430px) minmax(360px, 520px) minmax(320px, 380px);
+      align-items: start;
+      gap: 28px;
+      padding: 38px;
+    }
+
+    .phone {
+      width: 390px;
+      min-height: 844px;
+      background: var(--paper);
+      border: 1px solid rgba(32, 32, 29, 0.12);
+      border-radius: 42px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .phone.interactive {
+      position: relative;
+    }
+
+    .status {
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 28px;
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .screen {
+      padding: 24px;
+    }
+
+    .eyebrow {
+      margin: 0 0 6px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 20px;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin: 0;
+    }
+
+    .title {
+      font-size: 32px;
+      line-height: 39px;
+      font-weight: 650;
+      max-width: 320px;
+    }
+
+    .copy {
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 22px;
+    }
+
+    .setup-stack {
+      display: grid;
+      gap: 14px;
+      margin-top: 26px;
+    }
+
+    .panel,
+    .card,
+    .note {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .panel {
+      padding: 16px;
+    }
+
+    .field-label {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 18px;
+    }
+
+    .habit-row {
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .habit-row:last-child {
+      border-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .habit-name {
+      font-size: 16px;
+      line-height: 22px;
+      font-weight: 600;
+    }
+
+    .habit-detail {
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 18px;
+    }
+
+    .habit-schedule {
+      grid-column: 2 / 4;
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 5px;
+      margin-top: 2px;
+    }
+
+    .habit-mode {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3px;
+      padding: 3px;
+      border-radius: 8px;
+      background: var(--soft);
+      align-self: start;
+    }
+
+    .mode-button {
+      min-width: 38px;
+      height: 28px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .mode-button.active {
+      background: var(--surface);
+      color: var(--ink);
+      box-shadow: 0 1px 2px rgba(32, 32, 29, 0.08);
+    }
+
+    .habit-frequency {
+      grid-column: 2 / 4;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 10px;
+      margin-top: 2px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--paper);
+    }
+
+    .detail-button {
+      width: 28px;
+      height: 28px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--muted);
+      display: grid;
+      place-items: center;
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1;
+      align-self: start;
+    }
+
+    .habit-row > .detail-button:first-child {
+      align-self: center;
+    }
+
+    .habit-frequency strong {
+      display: block;
+      font-size: 13px;
+      line-height: 18px;
+      font-weight: 650;
+    }
+
+    .habit-frequency span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 16px;
+    }
+
+    .habit-row[data-mode="count"] .habit-schedule,
+    .habit-row[data-mode="days"] .habit-frequency {
+      display: none;
+    }
+
+    .add-habit {
+      width: 100%;
+      min-height: 42px;
+      margin-top: 14px;
+      border: 1px dashed #c7c7bf;
+      border-radius: 8px;
+      background: var(--paper);
+      color: var(--ink);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 650;
+    }
+
+    .add-habit span {
+      width: 22px;
+      height: 22px;
+      border-radius: 7px;
+      background: var(--ink);
+      color: var(--surface);
+      display: grid;
+      place-items: center;
+      line-height: 1;
+    }
+
+    .icon-button {
+      width: 34px;
+      height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--ink);
+      display: grid;
+      place-items: center;
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .segmented {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-top: 12px;
+      padding: 4px;
+      background: var(--soft);
+      border-radius: 8px;
+    }
+
+    .segment {
+      min-height: 34px;
+      border: 0;
+      border-radius: 6px;
+      color: var(--muted);
+      background: transparent;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .segment.active {
+      background: var(--surface);
+      color: var(--ink);
+      box-shadow: 0 1px 2px rgba(32, 32, 29, 0.08);
+    }
+
+    .weekday-picker {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 6px;
+      margin-top: 12px;
+    }
+
+    .weekday-toggle {
+      height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .weekday-toggle.active {
+      border-color: var(--sage);
+      background: var(--sage-soft);
+      color: var(--sage);
+    }
+
+    .target-line {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .challenge-controls {
+      display: grid;
+      gap: 16px;
+      margin-top: 14px;
+    }
+
+    .control-row {
+      display: grid;
+      grid-template-columns: 1fr 82px;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .control-title {
+      font-size: 15px;
+      line-height: 20px;
+      font-weight: 650;
+    }
+
+    .control-hint {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 18px;
+    }
+
+    .number-field {
+      width: 82px;
+      height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--ink);
+      text-align: center;
+      font-size: 18px;
+      font-weight: 650;
+    }
+
+    .range-wrap {
+      display: grid;
+      gap: 8px;
+    }
+
+    .range-wrap input[type="range"] {
+      width: 100%;
+      accent-color: var(--sage);
+    }
+
+    .range-labels {
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 14px;
+    }
+
+    .condition-box {
+      padding: 12px;
+      border-radius: 8px;
+      background: var(--sage-soft);
+      color: var(--sage);
+      font-size: 14px;
+      line-height: 20px;
+      font-weight: 600;
+    }
+
+    .timeless-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--paper);
+      color: var(--ink);
+    }
+
+    .timeless-toggle strong {
+      display: block;
+      font-size: 14px;
+      line-height: 19px;
+      font-weight: 650;
+    }
+
+    .timeless-toggle span {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 16px;
+    }
+
+    .switch {
+      position: relative;
+      width: 46px;
+      height: 28px;
+      flex: 0 0 auto;
+    }
+
+    .switch input {
+      position: absolute;
+      opacity: 0;
+      inset: 0;
+    }
+
+    .switch-track {
+      position: absolute;
+      inset: 0;
+      border-radius: 999px;
+      background: var(--line);
+      transition: background 120ms ease;
+    }
+
+    .switch-track::after {
+      content: "";
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--surface);
+      box-shadow: 0 1px 2px rgba(32, 32, 29, 0.18);
+      transition: transform 120ms ease;
+    }
+
+    .switch input:checked + .switch-track {
+      background: var(--sage);
+    }
+
+    .switch input:checked + .switch-track::after {
+      transform: translateX(18px);
+    }
+
+    .challenge-controls.timeless .duration-bound,
+    .challenge-controls.timeless .target-bound {
+      opacity: 0.45;
+    }
+
+    .challenge-color-panel {
+      display: grid;
+      gap: 12px;
+      margin-bottom: 14px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .stepper {
+      display: grid;
+      grid-template-columns: 34px 34px 34px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--surface);
+    }
+
+    .stepper button {
+      height: 34px;
+      border: 0;
+      background: transparent;
+      color: var(--ink);
+      font-size: 18px;
+    }
+
+    .stepper span {
+      text-align: center;
+      color: var(--ink);
+      font-size: 14px;
+      font-weight: 650;
+    }
+
+    .reward {
+      background: var(--sun-soft);
+      border-color: #dfcc89;
+    }
+
+    .reward .field-label,
+    .reward .copy {
+      color: #735f21;
+    }
+
+    .primary {
+      width: 100%;
+      height: 52px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--ink);
+      color: var(--surface);
+      font-size: 16px;
+      font-weight: 650;
+    }
+
+    .week-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+    }
+
+    .week-badge {
+      height: 36px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--muted);
+      display: inline-flex;
+      align-items: center;
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .week-grid {
+      margin-top: 18px;
+      display: grid;
+      grid-template-columns: 104px repeat(7, 1fr);
+      gap: 5px;
+      position: relative;
+    }
+
+    .grid-label,
+    .day-head,
+    .habit-head,
+    .cell {
+      min-height: 44px;
+      border-radius: 8px;
+    }
+
+    .grid-label {
+      display: grid;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .day-head {
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      background: var(--surface);
+      border: 1px solid var(--line);
+    }
+
+    .habit-head {
+      display: grid;
+      align-content: center;
+      gap: 3px;
+      padding: 0 10px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+    }
+
+    .habit-head.walk {
+      border-left: 5px solid var(--sage);
+      background: #fbfcfa;
+    }
+
+    .habit-head.mind {
+      border-left: 5px solid var(--sun);
+      background: #fffdf4;
+    }
+
+    .habit-head strong {
+      font-size: 13px;
+      line-height: 16px;
+      font-weight: 650;
+    }
+
+    .habit-head span {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 14px;
+    }
+
+    .cell {
+      border: 1px solid rgba(222, 222, 216, 0.72);
+      background: rgba(255, 255, 255, 0.42);
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-size: 16px;
+      font-weight: 700;
+      transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+    }
+
+    .cell.planned {
+      border-color: #c9d7ce;
+      background: var(--sage-soft);
+      color: transparent;
+    }
+
+    .cell.planned.mind {
+      border-color: #dfcc89;
+      background: var(--sun-soft);
+      color: transparent;
+    }
+
+    .cell.done {
+      border-color: var(--sage);
+      background: var(--sage);
+      color: var(--surface);
+    }
+
+    .cell.done.mind {
+      border-color: var(--sun);
+      background: var(--sun);
+      color: var(--surface);
+    }
+
+    .cell.rest {
+      border-color: rgba(222, 222, 216, 0.52);
+      background: rgba(255, 255, 255, 0.24);
+      color: transparent;
+    }
+
+    .today-outline {
+      position: absolute;
+      top: -4px;
+      bottom: -4px;
+      left: calc(104px + 5px + 3 * (((100% - 104px - 35px) / 7) + 5px));
+      width: calc((100% - 104px - 35px) / 7);
+      border: 1.5px solid rgba(32, 32, 29, 0.28);
+      border-radius: 10px;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .fab {
+      position: absolute;
+      right: 24px;
+      bottom: 24px;
+      width: 58px;
+      height: 58px;
+      border: 0;
+      border-radius: 50%;
+      background: var(--ink);
+      color: var(--surface);
+      display: grid;
+      place-items: center;
+      font-size: 28px;
+      line-height: 1;
+      box-shadow: 0 14px 34px rgba(32, 32, 29, 0.24);
+    }
+
+    .form-stack {
+      display: grid;
+      gap: 14px;
+      margin-top: 20px;
+    }
+
+    .text-field,
+    .text-area {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--ink);
+      padding: 12px;
+      font-size: 15px;
+      line-height: 21px;
+    }
+
+    .text-area {
+      min-height: 88px;
+      resize: vertical;
+    }
+
+    .color-row,
+    .time-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .color-swatch {
+      width: 30px;
+      height: 30px;
+      border: 2px solid var(--surface);
+      border-radius: 50%;
+      box-shadow: 0 0 0 1px rgba(32, 32, 29, 0.16);
+      background: var(--sage);
+    }
+
+    .color-swatch.active {
+      box-shadow: 0 0 0 2px var(--ink);
+    }
+
+    .time-chip {
+      height: 34px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .time-chip.active {
+      border-color: var(--sage);
+      background: var(--sage-soft);
+      color: var(--sage);
+    }
+
+    .schedule-panel[data-mode="count"] .weekday-picker,
+    .schedule-panel[data-mode="days"] .target-line {
+      display: none;
+    }
+
+    .side {
+      display: grid;
+      gap: 14px;
+      padding-top: 8px;
+    }
+
+    .side h2 {
+      font-size: 28px;
+      line-height: 35px;
+      font-weight: 650;
+    }
+
+    .note {
+      padding: 16px;
+    }
+
+    .note h3 {
+      font-size: 16px;
+      line-height: 22px;
+      font-weight: 650;
+      margin-bottom: 8px;
+    }
+
+    .note p {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 21px;
+    }
+
+    .legend {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 18px;
+    }
+
+    .legend-mark {
+      width: 18px;
+      height: 18px;
+      border-radius: 6px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      flex: 0 0 auto;
+    }
+
+    .legend-mark.done {
+      border-color: var(--sage);
+      background: var(--sage);
+    }
+
+    .legend-mark.rest {
+      border-color: transparent;
+      background: transparent;
+    }
+
+    @media (max-width: 1180px) {
+      .board {
+        grid-template-columns: 1fr;
+        justify-items: center;
+        padding: 24px;
+      }
+
+      .phone {
+        width: min(390px, calc(100vw - 48px));
+      }
+
+      .side {
+        width: min(390px, calc(100vw - 48px));
+      }
+    }
+
+    @media (max-width: 430px) {
+      .board {
+        padding: 0;
+        gap: 0;
+      }
+
+      .phone {
+        width: 100%;
+        min-height: 100vh;
+        border-radius: 0;
+        box-shadow: none;
+        border: 0;
+      }
+
+      .screen {
+        padding: 20px;
+      }
+
+      .week-grid {
+        grid-template-columns: 98px repeat(7, minmax(29px, 1fr));
+        gap: 4px;
+      }
+
+      .cell,
+      .day-head,
+      .habit-head {
+        min-height: 40px;
+        border-radius: 7px;
+      }
+
+      .habit-head {
+        padding: 0 7px;
+      }
+
+      .side {
+        width: 100%;
+        padding: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="board">
+    <section class="phone" aria-label="Настройка челленджа">
+      <div class="status">
+        <span>9:41</span>
+        <span>5G 86%</span>
+      </div>
+      <div class="screen">
+        <p class="eyebrow">Новый челлендж</p>
+        <h1 class="title">Тело в ритме</h1>
+
+        <div class="setup-stack">
+          <section class="panel">
+            <div class="challenge-color-panel">
+              <p class="field-label">Цвет челленджа</p>
+              <div class="color-row" aria-label="Цвет челленджа">
+                <button class="color-swatch active" type="button" aria-label="Шалфей" style="background: var(--sage);"></button>
+                <button class="color-swatch" type="button" aria-label="Синий" style="background: var(--blue);"></button>
+                <button class="color-swatch" type="button" aria-label="Глина" style="background: var(--clay);"></button>
+                <button class="color-swatch" type="button" aria-label="Жёлтый" style="background: var(--sun);"></button>
+              </div>
+            </div>
+            <p class="field-label">Привычки в челлендже</p>
+            <div class="habit-row" data-mode="days">
+              <button class="detail-button" type="button" aria-label="Открыть детали прогулки">...</button>
+              <div>
+                <div class="habit-name">Гулять 40 минут</div>
+                <div class="habit-detail">понедельник, вторник, пятница</div>
+              </div>
+              <div class="habit-mode" role="group" aria-label="Режим расписания прогулки">
+                <button class="mode-button active" type="button" data-mode="days">дни</button>
+                <button class="mode-button" type="button" data-mode="count">раз</button>
+              </div>
+              <div class="habit-schedule" aria-label="Расписание прогулки">
+                <button class="weekday-toggle active" type="button">ПН</button>
+                <button class="weekday-toggle active" type="button">ВТ</button>
+                <button class="weekday-toggle" type="button">СР</button>
+                <button class="weekday-toggle" type="button">ЧТ</button>
+                <button class="weekday-toggle active" type="button">ПТ</button>
+                <button class="weekday-toggle" type="button">СБ</button>
+                <button class="weekday-toggle" type="button">ВС</button>
+              </div>
+              <div class="habit-frequency" aria-label="Количество прогулок в неделю">
+                <div>
+                  <strong>3 раза в неделю</strong>
+                  <span>Любые дни, когда получилось.</span>
+                </div>
+                <div class="stepper" aria-label="Прогулок в неделю">
+                  <button type="button" aria-label="Уменьшить">-</button>
+                  <span>3</span>
+                  <button type="button" aria-label="Увеличить">+</button>
+                </div>
+              </div>
+            </div>
+            <div class="habit-row" data-mode="days">
+              <button class="detail-button" type="button" aria-label="Открыть детали спорта">...</button>
+              <div>
+                <div class="habit-name">Спорт 30 минут</div>
+                <div class="habit-detail">среда, четверг, суббота</div>
+              </div>
+              <div class="habit-mode" role="group" aria-label="Режим расписания спорта">
+                <button class="mode-button active" type="button" data-mode="days">дни</button>
+                <button class="mode-button" type="button" data-mode="count">раз</button>
+              </div>
+              <div class="habit-schedule" aria-label="Расписание спорта">
+                <button class="weekday-toggle" type="button">ПН</button>
+                <button class="weekday-toggle" type="button">ВТ</button>
+                <button class="weekday-toggle active" type="button">СР</button>
+                <button class="weekday-toggle active" type="button">ЧТ</button>
+                <button class="weekday-toggle" type="button">ПТ</button>
+                <button class="weekday-toggle active" type="button">СБ</button>
+                <button class="weekday-toggle" type="button">ВС</button>
+              </div>
+              <div class="habit-frequency" aria-label="Количество тренировок в неделю">
+                <div>
+                  <strong>3 раза в неделю</strong>
+                  <span>Подойдёт любой день недели.</span>
+                </div>
+                <div class="stepper" aria-label="Тренировок в неделю">
+                  <button type="button" aria-label="Уменьшить">-</button>
+                  <span>3</span>
+                  <button type="button" aria-label="Увеличить">+</button>
+                </div>
+              </div>
+            </div>
+            <button class="add-habit" type="button"><span>+</span> Добавить привычку</button>
+          </section>
+
+          <section class="panel">
+            <p class="field-label">Срок и условие выполнения</p>
+            <div class="challenge-controls" id="challengeControls">
+              <div class="control-row duration-bound">
+                <div>
+                  <div class="control-title">Срок челленджа</div>
+                  <div class="control-hint">От 1 до 100 недель или без срока окончания.</div>
+                </div>
+                <input class="number-field" id="durationWeeks" type="number" min="1" max="100" value="4" aria-label="Срок челленджа в неделях">
+              </div>
+
+              <label class="timeless-toggle">
+                <span>
+                  <strong>Без срока окончания</strong>
+                  <span>Привычки продолжаются, пока я сам не завершу челлендж.</span>
+                </span>
+                <span class="switch">
+                  <input id="timelessToggle" type="checkbox" aria-label="Челлендж без срока окончания">
+                  <span class="switch-track"></span>
+                </span>
+              </label>
+
+              <div class="control-row target-bound">
+                <div>
+                  <div class="control-title">Успешных недель</div>
+                  <div class="control-hint">Сколько недель нужно закрыть, чтобы получить награду.</div>
+                </div>
+                <input class="number-field" id="targetWeeks" type="number" min="1" value="3" aria-label="Нужно успешных недель">
+              </div>
+              <div class="range-wrap target-bound">
+                <input id="targetRange" type="range" min="1" max="4" value="3" aria-label="Выбрать количество успешных недель">
+                <div class="range-labels">
+                  <span>мягко</span>
+                  <span>ровно</span>
+                  <span>строго</span>
+                </div>
+              </div>
+              <div class="condition-box" id="conditionText">Челлендж засчитывается, если набрано 3 успешные недели из 4.</div>
+            </div>
+          </section>
+
+          <section class="panel reward">
+            <p class="field-label">Моя награда</p>
+            <p class="copy">После челленджа я покупаю себе новую книгу и выделяю вечер без дел.</p>
+          </section>
+
+          <button class="primary" type="button">Начать челлендж</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="phone interactive" aria-label="Недельная таблица привычек">
+      <div class="status">
+        <span>9:41</span>
+        <span>5G 86%</span>
+      </div>
+      <div class="screen">
+        <div class="week-top">
+          <div>
+            <p class="eyebrow">Общий план</p>
+            <h1 class="title">Эта неделя</h1>
+          </div>
+          <div class="week-badge">2 челленджа</div>
+        </div>
+
+        <div class="week-grid" aria-label="Неделя привычек">
+          <div class="today-outline" aria-hidden="true"></div>
+          <div class="grid-label">Привычки</div>
+          <div class="day-head">ПН</div>
+          <div class="day-head">ВТ</div>
+          <div class="day-head">СР</div>
+          <div class="day-head">ЧТ</div>
+          <div class="day-head">ПТ</div>
+          <div class="day-head">СБ</div>
+          <div class="day-head">ВС</div>
+
+          <div class="habit-head walk">
+            <strong>Гулять</strong>
+            <span>Тело в ритме</span>
+          </div>
+          <button class="cell done" type="button" aria-label="Гулять понедельник выполнено">✓</button>
+          <button class="cell done" type="button" aria-label="Гулять вторник выполнено">✓</button>
+          <button class="cell rest" type="button" aria-label="Гулять среда пусто"></button>
+          <button class="cell rest" type="button" aria-label="Гулять четверг сегодня пусто"></button>
+          <button class="cell planned" type="button" aria-label="Гулять пятница запланировано"></button>
+          <button class="cell rest" type="button" aria-label="Гулять суббота пусто"></button>
+          <button class="cell rest" type="button" aria-label="Гулять воскресенье пусто"></button>
+
+          <div class="habit-head walk">
+            <strong>Спорт</strong>
+            <span>Тело в ритме</span>
+          </div>
+          <button class="cell rest" type="button" aria-label="Спорт понедельник пусто"></button>
+          <button class="cell rest" type="button" aria-label="Спорт вторник пусто"></button>
+          <button class="cell done" type="button" aria-label="Спорт среда выполнено">✓</button>
+          <button class="cell planned" type="button" aria-label="Спорт четверг сегодня запланировано"></button>
+          <button class="cell rest" type="button" aria-label="Спорт пятница пусто"></button>
+          <button class="cell planned" type="button" aria-label="Спорт суббота запланировано"></button>
+          <button class="cell rest" type="button" aria-label="Спорт воскресенье пусто"></button>
+
+          <div class="habit-head mind">
+            <strong>Чтение</strong>
+            <span>Спокойный вечер</span>
+          </div>
+          <button class="cell rest" type="button" aria-label="Чтение понедельник пусто"></button>
+          <button class="cell done mind" type="button" aria-label="Чтение вторник выполнено">✓</button>
+          <button class="cell rest" type="button" aria-label="Чтение среда пусто"></button>
+          <button class="cell planned mind" type="button" aria-label="Чтение четверг сегодня запланировано"></button>
+          <button class="cell rest" type="button" aria-label="Чтение пятница пусто"></button>
+          <button class="cell rest" type="button" aria-label="Чтение суббота пусто"></button>
+          <button class="cell planned mind" type="button" aria-label="Чтение воскресенье запланировано"></button>
+        </div>
+        <button class="fab" type="button" aria-label="Создать привычку или челлендж">+</button>
+      </div>
+    </section>
+
+    <section class="phone" aria-label="Создание привычки">
+      <div class="status">
+        <span>9:41</span>
+        <span>5G 86%</span>
+      </div>
+      <div class="screen">
+        <p class="eyebrow">Новая привычка</p>
+
+        <div class="form-stack">
+          <section class="panel">
+            <p class="field-label">Название</p>
+            <input class="text-field" type="text" value="Читать 20 минут" aria-label="Название привычки">
+          </section>
+
+          <section class="panel">
+            <p class="field-label">Описание</p>
+            <textarea class="text-area" aria-label="Описание привычки">Перед сном, без телефона рядом. Если день сложный, достаточно 10 минут.</textarea>
+          </section>
+
+          <section class="panel">
+            <p class="field-label">Цвет</p>
+            <div class="color-row" aria-label="Цвет привычки">
+              <button class="color-swatch active" type="button" aria-label="Шалфей" style="background: var(--sage);"></button>
+              <button class="color-swatch" type="button" aria-label="Синий" style="background: var(--blue);"></button>
+              <button class="color-swatch" type="button" aria-label="Глина" style="background: var(--clay);"></button>
+              <button class="color-swatch" type="button" aria-label="Жёлтый" style="background: var(--sun);"></button>
+            </div>
+          </section>
+
+          <section class="panel schedule-panel" data-mode="days">
+            <p class="field-label">Расписание</p>
+            <div class="segmented" role="group" aria-label="Режим новой привычки">
+              <button class="segment active" type="button" data-schedule-mode="days">конкретные дни</button>
+              <button class="segment" type="button" data-schedule-mode="count">раз в неделю</button>
+            </div>
+            <div class="weekday-picker" aria-label="Дни новой привычки">
+              <button class="weekday-toggle" type="button">ПН</button>
+              <button class="weekday-toggle active" type="button">ВТ</button>
+              <button class="weekday-toggle" type="button">СР</button>
+              <button class="weekday-toggle active" type="button">ЧТ</button>
+              <button class="weekday-toggle" type="button">ПТ</button>
+              <button class="weekday-toggle" type="button">СБ</button>
+              <button class="weekday-toggle active" type="button">ВС</button>
+            </div>
+            <div class="target-line">
+              <p class="copy">Или выбрать мягкую цель по количеству выполнений в неделю.</p>
+              <div class="stepper" aria-label="Выполнений новой привычки в неделю">
+                <button type="button" aria-label="Уменьшить">-</button>
+                <span>3</span>
+                <button type="button" aria-label="Увеличить">+</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <p class="field-label">Напоминания</p>
+            <div class="time-row" aria-label="Время напоминаний">
+              <button class="time-chip" type="button">08:30</button>
+              <button class="time-chip active" type="button">20:30</button>
+              <button class="time-chip" type="button">22:00</button>
+              <button class="time-chip" type="button">+ время</button>
+            </div>
+          </section>
+
+          <button class="primary" type="button">Сохранить привычку</button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="side" aria-label="Продуктовые решения">
+      <h2>Новая логика</h2>
+      <section class="note">
+        <h3>Главный экран как таблица недели</h3>
+        <p>Дни идут сверху с понедельника по воскресенье, привычки стоят слева. Это общая неделя со всеми активными привычками из разных челленджей.</p>
+      </section>
+      <section class="note">
+        <h3>У каждой привычки свой ритм</h3>
+        <p>Привычка может быть расписанием по дням или целью по количеству раз в неделю. Цвет выбирается через кружок слева от названия.</p>
+      </section>
+      <section class="note">
+        <h3>Срок и условие разделены</h3>
+        <p>Челлендж может иметь срок в неделях или идти без даты окончания. Если срок задан, пользователь отдельно выбирает, сколько успешных недель нужно набрать.</p>
+      </section>
+      <section class="note">
+        <h3>Состояния ячеек</h3>
+        <div class="legend">
+          <div class="legend-item"><span class="legend-mark done"></span> выполнено</div>
+          <div class="legend-item"><span class="legend-mark"></span> запланировано</div>
+          <div class="legend-item"><span class="legend-mark rest"></span> пусто</div>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <script>
+    const states = [
+      { className: 'planned', label: '', text: 'запланировано' },
+      { className: 'done', label: '✓', text: 'выполнено' },
+      { className: 'rest', label: '', text: 'пусто' }
+    ];
+
+    document.querySelectorAll('.cell').forEach((cell) => {
+      cell.addEventListener('click', () => {
+        const current = states.findIndex((state) => cell.classList.contains(state.className));
+        const next = states[(current + 1) % states.length];
+        states.forEach((state) => cell.classList.remove(state.className));
+        cell.classList.add(next.className);
+        cell.textContent = next.label;
+      });
+    });
+
+    document.querySelectorAll('.weekday-toggle').forEach((button) => {
+      button.addEventListener('click', () => {
+        button.classList.toggle('active');
+      });
+    });
+
+    document.querySelectorAll('.segment').forEach((button) => {
+      button.addEventListener('click', () => {
+        const group = button.parentElement;
+        group.querySelectorAll('.segment').forEach((item) => item.classList.remove('active'));
+        button.classList.add('active');
+        const schedulePanel = button.closest('.schedule-panel');
+        if (schedulePanel && button.dataset.scheduleMode) {
+          schedulePanel.dataset.mode = button.dataset.scheduleMode;
+        }
+      });
+    });
+
+    document.querySelectorAll('.habit-mode').forEach((group) => {
+      group.addEventListener('click', (event) => {
+        const button = event.target.closest('.mode-button');
+        if (!button) return;
+        const habit = button.closest('.habit-row');
+        habit.dataset.mode = button.dataset.mode;
+        group.querySelectorAll('.mode-button').forEach((item) => item.classList.remove('active'));
+        button.classList.add('active');
+      });
+    });
+
+    document.querySelectorAll('.habit-frequency .stepper').forEach((stepper) => {
+      const value = stepper.querySelector('span');
+      const label = stepper.closest('.habit-frequency')?.querySelector('strong');
+      stepper.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          const delta = button.getAttribute('aria-label') === 'Увеличить' ? 1 : -1;
+          const next = Math.min(7, Math.max(1, Number(value.textContent) + delta));
+          value.textContent = String(next);
+          label.textContent = `${next} ${next === 1 ? 'раз' : next < 5 ? 'раза' : 'раз'} в неделю`;
+        });
+      });
+    });
+
+    document.querySelectorAll('.form-stack .stepper').forEach((stepper) => {
+      const value = stepper.querySelector('span');
+      stepper.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          const delta = button.getAttribute('aria-label') === 'Увеличить' ? 1 : -1;
+          value.textContent = String(Math.min(7, Math.max(1, Number(value.textContent) + delta)));
+        });
+      });
+    });
+
+    document.querySelectorAll('.color-swatch').forEach((button) => {
+      button.addEventListener('click', () => {
+        const row = button.closest('.color-row');
+        row.querySelectorAll('.color-swatch').forEach((item) => item.classList.remove('active'));
+        button.classList.add('active');
+      });
+    });
+
+    document.querySelectorAll('.time-chip').forEach((button) => {
+      button.addEventListener('click', () => {
+        if (button.textContent.trim().startsWith('+')) return;
+        button.classList.toggle('active');
+      });
+    });
+
+    const challengeControls = document.querySelector('#challengeControls');
+    const durationWeeks = document.querySelector('#durationWeeks');
+    const targetWeeks = document.querySelector('#targetWeeks');
+    const targetRange = document.querySelector('#targetRange');
+    const conditionText = document.querySelector('#conditionText');
+    const timelessToggle = document.querySelector('#timelessToggle');
+
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, Number(value) || min));
+    }
+
+    function weekWord(value, adjective) {
+      const last = value % 10;
+      const lastTwo = value % 100;
+      if (last === 1 && lastTwo !== 11) return adjective === 'success' ? 'успешная неделя' : 'неделя';
+      if (last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14)) return adjective === 'success' ? 'успешные недели' : 'недели';
+      return adjective === 'success' ? 'успешных недель' : 'недель';
+    }
+
+    function totalWeeksWord(value) {
+      return value === 1 ? 'недели' : 'недель';
+    }
+
+    function syncChallenge(source) {
+      if (!durationWeeks || !targetWeeks || !targetRange || !conditionText) return;
+
+      if (timelessToggle?.checked) {
+        challengeControls?.classList.add('timeless');
+        durationWeeks.disabled = true;
+        targetWeeks.disabled = true;
+        targetRange.disabled = true;
+        conditionText.textContent = 'Челлендж продолжается без срока окончания. Успешные недели копятся как серия, а завершить его можно вручную.';
+        return;
+      }
+
+      challengeControls?.classList.remove('timeless');
+      durationWeeks.disabled = false;
+      targetWeeks.disabled = false;
+      targetRange.disabled = false;
+
+      const duration = clamp(durationWeeks.value, 1, 100);
+      durationWeeks.value = duration;
+      targetWeeks.max = duration;
+      targetRange.max = duration;
+
+      const target = clamp(source === targetRange ? targetRange.value : targetWeeks.value, 1, duration);
+      targetWeeks.value = target;
+      targetRange.value = target;
+      conditionText.textContent = `Челлендж засчитывается, если набрано ${target} ${weekWord(target, 'success')} из ${duration} ${totalWeeksWord(duration)}.`;
+    }
+
+    [durationWeeks, targetWeeks, targetRange].forEach((control) => {
+      control?.addEventListener('input', () => syncChallenge(control));
+    });
+    timelessToggle?.addEventListener('change', () => syncChallenge(timelessToggle));
+
+    syncChallenge(durationWeeks);
+  </script>
+</body>
+</html>

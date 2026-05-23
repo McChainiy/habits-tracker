@@ -13,17 +13,18 @@ struct RootView: View {
     @Query(sort: \Challenge.createdAt, order: .reverse)
     private var challenges: [Challenge]
 
-    private var currentChallenge: Challenge? {
-        challenges.first { $0.status == .active && $0.deletedAt == nil } ??
-        challenges.first { $0.deletedAt == nil }
+    private var activeChallenges: [Challenge] {
+        let visibleChallenges = challenges.filter { $0.deletedAt == nil }
+        let active = visibleChallenges.filter { $0.status == .active }
+        return active.isEmpty ? visibleChallenges : active
     }
 
     var body: some View {
         NavigationStack {
-            if let currentChallenge {
-                MonthDashboardView(challenge: currentChallenge)
-            } else {
+            if activeChallenges.isEmpty {
                 SetupChallengeView()
+            } else {
+                WeeklyDashboardView(challenges: activeChallenges)
             }
         }
         .tint(AppPalette.ink)
