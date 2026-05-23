@@ -12,6 +12,7 @@ struct WeeklyDashboardView: View {
     @State private var sheet: DashboardSheet?
     @State private var isCreateDialogPresented = false
     @State private var selectedFilter: ChallengeFilter = .all
+    @State private var highlightedChallengeID: UUID?
 
     private let calendar = Calendar.current
     private let weekdays = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"]
@@ -98,13 +99,19 @@ struct WeeklyDashboardView: View {
                 sheet = .newChallenge
             }
         }
-        .sheet(item: $sheet) { item in
+        .sheet(item: $sheet, onDismiss: {
+            highlightedChallengeID = nil
+        }) { item in
             NavigationStack {
                 switch item {
                 case .newHabit:
                     HabitFormView(challenges: visibleChallenges)
                 case .newChallenge:
                     SetupChallengeView()
+                case .editHabit(let habit):
+                    HabitFormView(challenges: visibleChallenges, habit: habit)
+                case .editChallenge(let challenge):
+                    SetupChallengeView(challenge: challenge)
                 }
             }
             .presentationDetents([.large])
@@ -184,7 +191,8 @@ struct WeeklyDashboardView: View {
                             HabitWeekCell(
                                 state: state(for: row.habit, on: date),
                                 color: Color(hex: colorHex(for: row)),
-                                isToday: calendar.isDateInToday(date)
+                                isToday: calendar.isDateInToday(date),
+                                isHighlighted: isHighlighted(row)
                             )
                         }
                         .buttonStyle(.plain)
@@ -241,7 +249,7 @@ struct WeeklyDashboardView: View {
             .padding(.trailing, 6)
             .frame(width: 98, alignment: .leading)
             .frame(minHeight: 42)
-            .background(Color(hex: colorHex(for: row)).opacity(0.06))
+            .background(Color(hex: colorHex(for: row)).opacity(isHighlighted(row) ? 0.18 : 0.06))
             .overlay(alignment: .leading) {
                 Rectangle()
                     .fill(Color(hex: colorHex(for: row)))
@@ -249,13 +257,28 @@ struct WeeklyDashboardView: View {
             }
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(AppPalette.line, lineWidth: 1)
+                    .stroke(isHighlighted(row) ? Color(hex: colorHex(for: row)) : AppPalette.line, lineWidth: isHighlighted(row) ? 1.5 : 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .contentShape(Rectangle())
+            .onTapGesture {
+                sheet = .editHabit(row.habit)
+            }
+            .onLongPressGesture(minimumDuration: 0.45) {
+                guard let challenge = row.challenge else { return }
+                withAnimation(.easeInOut(duration: 0.16)) {
+                    highlightedChallengeID = challenge.id
+                }
+                sheet = .editChallenge(challenge)
+            }
     }
 
     private func colorHex(for row: WeeklyHabitRow) -> String {
         row.challenge?.colorHex ?? row.habit.colorHex
+    }
+
+    private func isHighlighted(_ row: WeeklyHabitRow) -> Bool {
+        row.challenge?.id == highlightedChallengeID
     }
 
     private var filterTitle: String {
@@ -354,11 +377,15 @@ private enum ChallengeFilter: Equatable {
 private enum DashboardSheet: Identifiable {
     case newHabit
     case newChallenge
+    case editHabit(Habit)
+    case editChallenge(Challenge)
 
     var id: String {
         switch self {
         case .newHabit: return "newHabit"
         case .newChallenge: return "newChallenge"
+        case .editHabit(let habit): return "editHabit-\(habit.id)"
+        case .editChallenge(let challenge): return "editChallenge-\(challenge.id)"
         }
     }
 }
@@ -381,6 +408,7 @@ private struct HabitWeekCell: View {
     let state: State
     let color: Color
     let isToday: Bool
+    let isHighlighted: Bool
 
     var body: some View {
         Text(label)
@@ -390,7 +418,7 @@ private struct HabitWeekCell: View {
             .background(background)
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(border, lineWidth: isToday ? 1.5 : 1)
+                    .stroke(border, lineWidth: isHighlighted || isToday ? 1.5 : 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .contentShape(Rectangle())
@@ -422,13 +450,20 @@ private struct HabitWeekCell: View {
         case .failed:
             return AppPalette.warningSoft
         case .planned:
-            return color.opacity(isToday ? 0.26 : 0.18)
+            return color.opacity(isHighlighted ? 0.32 : (isToday ? 0.26 : 0.18))
         case .rest:
+            if isHighlighted {
+                return color.opacity(0.13)
+            }
             return isToday ? AppPalette.soft : AppPalette.surface.opacity(0.42)
         }
     }
 
     private var border: Color {
+        if isHighlighted {
+            return color
+        }
+
         if isToday {
             return AppPalette.accent
         }
@@ -451,16 +486,18 @@ private struct HabitFormView: View {
     @Environment(\.dismiss) private var dismiss
 
     let challenges: [Challenge]
+    let habit: Habit?
 
     @State private var selectedChallengeID: UUID?
-    @State private var title = "Читать 20 минут"
-    @State private var note = "Перед сном, без телефона рядом. Если день сложный, достаточно 10 минут."
-    @State private var colorHex = HabitColor.sage.rawValue
-    @State private var scheduleMode: HabitScheduleMode = .days
-    @State private var scheduledWeekdays: Set<Int> = [2, 4, 7]
-    @State private var weeklyTarget = 3
-    @State private var selectedReminderHour = 20
-    @State private var reminderTimes: Set<String> = ["20:00"]
+    @State private var title: String
+    @State private var note: String
+    @State private var colorHex: String
+    @State private var scheduleMode: HabitScheduleMode
+    @State private var scheduledWeekdays: Set<Int>
+    @State private var weeklyTarget: Int
+    @State private var selectedReminderTime: Date
+    @State private var reminderTimes: Set<String>
+    @State private var isDeleteConfirmationPresented = false
 
     private let weekdays = [
         (1, "ПН"),
@@ -475,15 +512,36 @@ private struct HabitFormView: View {
         challenges.first { $0.id == selectedChallengeID }
     }
 
+    private var isEditing: Bool {
+        habit != nil
+    }
+
     private var canSave: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         (scheduleMode == .count || !scheduledWeekdays.isEmpty)
     }
 
+    init(challenges: [Challenge], habit: Habit? = nil) {
+        self.challenges = challenges
+        self.habit = habit
+
+        _selectedChallengeID = State(initialValue: habit?.challenge?.id)
+        _title = State(initialValue: habit?.title ?? "Читать 20 минут")
+        _note = State(initialValue: habit?.note ?? "Перед сном, без телефона рядом. Если день сложный, достаточно 10 минут.")
+        _colorHex = State(initialValue: habit?.colorHex ?? HabitColor.sage.rawValue)
+        _scheduleMode = State(initialValue: habit?.scheduleMode ?? .days)
+        _scheduledWeekdays = State(initialValue: habit?.scheduledWeekdays ?? [2, 4, 7])
+        _weeklyTarget = State(initialValue: habit?.weeklyTarget ?? 3)
+
+        let reminders = Set(habit?.reminderTimes ?? ["20:00"])
+        _reminderTimes = State(initialValue: reminders)
+        _selectedReminderTime = State(initialValue: HabitFormView.reminderDate(from: reminders.sorted().first ?? "20:00"))
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                Text("Новая привычка")
+                Text(isEditing ? "Редактирование привычки" : "Новая привычка")
                     .font(.system(size: 14))
                     .foregroundStyle(AppPalette.muted)
 
@@ -491,12 +549,19 @@ private struct HabitFormView: View {
                 schedulePanel
                 reminderPanel
 
-                Button("Сохранить привычку") {
+                Button(isEditing ? "Сохранить изменения" : "Сохранить привычку") {
                     saveHabit()
                 }
                 .buttonStyle(PrimaryButtonStyle())
                 .disabled(!canSave)
                 .opacity(canSave ? 1 : 0.45)
+
+                if isEditing {
+                    Button("Удалить привычку", role: .destructive) {
+                        isDeleteConfirmationPresented = true
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                }
             }
             .padding(20)
         }
@@ -507,6 +572,14 @@ private struct HabitFormView: View {
                     dismiss()
                 }
             }
+        }
+        .alert("Удалить привычку?", isPresented: $isDeleteConfirmationPresented) {
+            Button("Удалить", role: .destructive) {
+                deleteHabit()
+            }
+            Button("Отмена", role: .cancel) {}
+        } message: {
+            Text("Все отметки этой привычки тоже будут удалены.")
         }
     }
 
@@ -613,22 +686,30 @@ private struct HabitFormView: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(AppPalette.muted)
 
-            HStack(spacing: 10) {
-                Picker("Час", selection: $selectedReminderHour) {
-                    ForEach(0..<24, id: \.self) { hour in
-                        Text(hourString(hour)).tag(hour)
-                    }
-                }
-                .pickerStyle(.menu)
+            DatePicker(
+                "Время",
+                selection: $selectedReminderTime,
+                displayedComponents: [.hourAndMinute]
+            )
+            .datePickerStyle(.wheel)
+            .labelsHidden()
+            .frame(maxWidth: .infinity)
+            .frame(height: 136)
+            .clipped()
 
+            HStack {
+                Text(timeString(from: selectedReminderTime))
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(AppPalette.ink)
+                Spacer()
                 Button("Добавить") {
-                    reminderTimes.insert(hourString(selectedReminderHour))
+                    reminderTimes.insert(timeString(from: selectedReminderTime))
                 }
                 .buttonStyle(SecondaryButtonStyle())
             }
 
             if !reminderTimes.isEmpty {
-                HStack(spacing: 8) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 78), spacing: 8)], alignment: .leading, spacing: 8) {
                     ForEach(reminderTimes.sorted(), id: \.self) { time in
                         Button {
                             reminderTimes.remove(time)
@@ -657,8 +738,21 @@ private struct HabitFormView: View {
         .weeklyPanelStyle()
     }
 
-    private func hourString(_ hour: Int) -> String {
-        String(format: "%02d:00", hour)
+    private func timeString(from date: Date) -> String {
+        let components = Calendar.current.dateComponents([.hour, .minute], from: date)
+        return String(format: "%02d:%02d", components.hour ?? 0, components.minute ?? 0)
+    }
+
+    private static func reminderDate(from time: String) -> Date {
+        let parts = time.split(separator: ":").compactMap { Int($0) }
+        var components = DateComponents()
+        components.calendar = Calendar.current
+        components.year = 2000
+        components.month = 1
+        components.day = 1
+        components.hour = parts.first.map { min(max($0, 0), 23) } ?? 20
+        components.minute = parts.dropFirst().first.map { min(max($0, 0), 59) } ?? 0
+        return components.date ?? Date()
     }
 
     private var colorPicker: some View {
@@ -736,29 +830,62 @@ private struct HabitFormView: View {
 
     private func saveHabit() {
         let challenge = selectedChallenge
-        let nextSortOrder = if let challenge {
-            (challenge.habits.map(\.sortOrder).max() ?? -1) + 1
+
+        if let habit {
+            let oldChallenge = habit.challenge
+            let didChangeChallenge = oldChallenge?.id != challenge?.id
+            let updatedSortOrder = didChangeChallenge ? nextSortOrder(for: challenge) : habit.sortOrder
+            habit.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            habit.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
+            habit.penaltyText = ""
+            habit.colorHex = challenge?.colorHex ?? colorHex
+            habit.scheduleMode = scheduleMode
+            habit.scheduledWeekdays = scheduledWeekdays
+            habit.weeklyTarget = weeklyTarget
+            habit.reminderTimes = reminderTimes.sorted()
+            habit.challenge = challenge
+            habit.userId = challenge?.user?.id ?? habit.userId
+            habit.sortOrder = updatedSortOrder
+            habit.touch()
+            oldChallenge?.touch()
+            challenge?.touch()
         } else {
-            0
+            let habit = Habit(
+                userId: challenge?.user?.id,
+                title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                note: note.trimmingCharacters(in: .whitespacesAndNewlines),
+                penaltyText: "",
+                colorHex: challenge?.colorHex ?? colorHex,
+                scheduleMode: scheduleMode,
+                scheduledWeekdays: scheduledWeekdays,
+                weeklyTarget: weeklyTarget,
+                reminderTimes: reminderTimes.sorted(),
+                sortOrder: nextSortOrder(for: challenge),
+                challenge: challenge
+            )
+            if let challenge {
+                challenge.habits.append(habit)
+                challenge.touch()
+            }
+            modelContext.insert(habit)
         }
-        let habit = Habit(
-            userId: challenge?.user?.id,
-            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-            note: note.trimmingCharacters(in: .whitespacesAndNewlines),
-            penaltyText: "",
-            colorHex: challenge?.colorHex ?? colorHex,
-            scheduleMode: scheduleMode,
-            scheduledWeekdays: scheduledWeekdays,
-            weeklyTarget: weeklyTarget,
-            reminderTimes: reminderTimes.sorted(),
-            sortOrder: nextSortOrder,
-            challenge: challenge
-        )
+
+        try? modelContext.save()
+        dismiss()
+    }
+
+    private func nextSortOrder(for challenge: Challenge?) -> Int {
         if let challenge {
-            challenge.habits.append(habit)
-            challenge.touch()
+            return (challenge.habits.map(\.sortOrder).max() ?? -1) + 1
         }
-        modelContext.insert(habit)
+        return 0
+    }
+
+    private func deleteHabit() {
+        guard let habit else { return }
+        let challenge = habit.challenge
+        modelContext.delete(habit)
+        challenge?.touch()
         try? modelContext.save()
         dismiss()
     }

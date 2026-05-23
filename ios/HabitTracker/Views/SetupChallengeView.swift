@@ -2,13 +2,47 @@ import SwiftData
 import SwiftUI
 
 private struct DraftHabit: Identifiable {
-    let id = UUID()
+    let id: UUID
+    var sourceHabit: Habit?
     var title = ""
     var note = ""
     var scheduleMode: HabitScheduleMode = .days
     var scheduledWeekdays: Set<Int>
     var weeklyTarget = 3
     var reminderTimes: [String] = []
+
+    init(
+        id: UUID = UUID(),
+        sourceHabit: Habit? = nil,
+        title: String = "",
+        note: String = "",
+        scheduleMode: HabitScheduleMode = .days,
+        scheduledWeekdays: Set<Int>,
+        weeklyTarget: Int = 3,
+        reminderTimes: [String] = []
+    ) {
+        self.id = id
+        self.sourceHabit = sourceHabit
+        self.title = title
+        self.note = note
+        self.scheduleMode = scheduleMode
+        self.scheduledWeekdays = scheduledWeekdays
+        self.weeklyTarget = weeklyTarget
+        self.reminderTimes = reminderTimes
+    }
+
+    init(habit: Habit) {
+        self.init(
+            id: habit.id,
+            sourceHabit: habit,
+            title: habit.title,
+            note: habit.note,
+            scheduleMode: habit.scheduleMode,
+            scheduledWeekdays: habit.scheduledWeekdays,
+            weeklyTarget: habit.weeklyTarget,
+            reminderTimes: habit.reminderTimes
+        )
+    }
 }
 
 struct SetupChallengeView: View {
@@ -18,27 +52,18 @@ struct SetupChallengeView: View {
     @Query(sort: \AppUser.createdAt)
     private var users: [AppUser]
 
+    private let challenge: Challenge?
     var onCreate: (() -> Void)?
 
-    @State private var title = "Тело в ритме"
-    @State private var selectedStartDate = Date()
-    @State private var colorHex = HabitColor.sage.rawValue
-    @State private var durationWeeksText = "4"
-    @State private var targetWeeks = 3
-    @State private var isTimeless = false
-    @State private var rewardText = "После челленджа я покупаю себе новую книгу и выделяю вечер без дел."
-    @State private var draftHabits: [DraftHabit] = [
-        DraftHabit(
-            title: "Гулять 40 минут",
-            note: "Свежий воздух без телефона в руках.",
-            scheduledWeekdays: [1, 2, 5]
-        ),
-        DraftHabit(
-            title: "Спорт 30 минут",
-            note: "Тренировка дома или зал.",
-            scheduledWeekdays: [3, 4, 6]
-        )
-    ]
+    @State private var title: String
+    @State private var selectedStartDate: Date
+    @State private var colorHex: String
+    @State private var durationWeeksText: String
+    @State private var targetWeeks: Int
+    @State private var isTimeless: Bool
+    @State private var rewardText: String
+    @State private var draftHabits: [DraftHabit]
+    @State private var isDeleteConfirmationPresented = false
 
     private let weekdays = [
         (1, "ПН"),
@@ -52,6 +77,10 @@ struct SetupChallengeView: View {
 
     private var clampedTargetWeeks: Int {
         min(max(targetWeeks, 1), max(durationWeeks, 1))
+    }
+
+    private var isEditing: Bool {
+        challenge != nil
     }
 
     private var durationWeeks: Int {
@@ -69,6 +98,20 @@ struct SetupChallengeView: View {
         }
     }
 
+    init(challenge: Challenge? = nil, onCreate: (() -> Void)? = nil) {
+        self.challenge = challenge
+        self.onCreate = onCreate
+
+        _title = State(initialValue: Self.initialTitle(for: challenge))
+        _selectedStartDate = State(initialValue: challenge?.startDate ?? Date())
+        _colorHex = State(initialValue: challenge?.colorHex ?? HabitColor.sage.rawValue)
+        _durationWeeksText = State(initialValue: String(min(max(challenge?.durationWeeks ?? 4, 1), 100)))
+        _targetWeeks = State(initialValue: challenge?.targetWeeks ?? 3)
+        _isTimeless = State(initialValue: challenge?.isTimeless ?? false)
+        _rewardText = State(initialValue: challenge?.rewardText ?? "После челленджа я покупаю себе новую книгу и выделяю вечер без дел.")
+        _draftHabits = State(initialValue: Self.initialDraftHabits(for: challenge))
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -78,12 +121,19 @@ struct SetupChallengeView: View {
                 conditionPanel
                 rewardPanel
 
-                Button("Начать челлендж") {
-                    createChallenge()
+                Button(isEditing ? "Сохранить изменения" : "Начать челлендж") {
+                    saveChallenge()
                 }
                 .buttonStyle(PrimaryButtonStyle())
                 .disabled(!canCreate)
                 .opacity(canCreate ? 1 : 0.45)
+
+                if isEditing {
+                    Button("Удалить челлендж", role: .destructive) {
+                        isDeleteConfirmationPresented = true
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                }
             }
             .padding(20)
         }
@@ -107,11 +157,28 @@ struct SetupChallengeView: View {
         .onChange(of: targetWeeks) { _, newValue in
             targetWeeks = min(max(newValue, 1), max(durationWeeks, 1))
         }
+        .toolbar {
+            if isEditing {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Закрыть") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .alert("Удалить челлендж?", isPresented: $isDeleteConfirmationPresented) {
+            Button("Удалить", role: .destructive) {
+                deleteChallenge()
+            }
+            Button("Отмена", role: .cancel) {}
+        } message: {
+            Text("Вместе с челленджем будут удалены все привычки внутри него и их отметки.")
+        }
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Новый челлендж")
+            Text(isEditing ? "Редактирование челленджа" : "Новый челлендж")
                 .font(.system(size: 14))
                 .foregroundStyle(AppPalette.muted)
 
@@ -416,7 +483,7 @@ struct SetupChallengeView: View {
             .frame(width: 12, height: 12)
     }
 
-    private func createChallenge() {
+    private func saveChallenge() {
         let calendar = Calendar.current
         let startDate = calendar.startOfDay(for: selectedStartDate)
         let components = calendar.dateComponents([.year, .month], from: startDate)
@@ -426,41 +493,103 @@ struct SetupChallengeView: View {
         let finalTarget = min(max(targetWeeks, 1), finalDuration)
         let endDate = calendar.date(byAdding: .day, value: finalDuration * 7 - 1, to: startDate) ?? startDate
 
-        let challenge = Challenge(
-            customTitle: title.trimmingCharacters(in: .whitespacesAndNewlines),
-            colorHex: colorHex,
-            month: month,
-            year: year,
-            startDate: startDate,
-            endDate: endDate,
-            durationWeeks: finalDuration,
-            targetWeeks: finalTarget,
-            isTimeless: isTimeless,
-            rewardText: rewardText.trimmingCharacters(in: .whitespacesAndNewlines),
-            status: .active,
-            user: users.first
-        )
+        if let challenge {
+            challenge.customTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            challenge.colorHex = colorHex
+            challenge.month = month
+            challenge.year = year
+            challenge.startDate = startDate
+            challenge.endDate = endDate
+            challenge.durationWeeks = finalDuration
+            challenge.targetWeeks = finalTarget
+            challenge.isTimeless = isTimeless
+            challenge.rewardText = rewardText.trimmingCharacters(in: .whitespacesAndNewlines)
+            challenge.status = .active
 
-        for (index, draft) in draftHabits.enumerated() {
-            let habit = Habit(
-                userId: users.first?.id,
-                title: draft.title.trimmingCharacters(in: .whitespacesAndNewlines),
-                note: draft.note.trimmingCharacters(in: .whitespacesAndNewlines),
-                penaltyText: "",
+            let keptIDs = Set(draftHabits.compactMap { $0.sourceHabit?.id })
+            let removedHabits = challenge.habits.filter { !keptIDs.contains($0.id) }
+            for habit in removedHabits {
+                modelContext.delete(habit)
+            }
+
+            for (index, draft) in draftHabits.enumerated() {
+                if let habit = draft.sourceHabit {
+                    update(habit, with: draft, sortOrder: index, challenge: challenge)
+                } else {
+                    let habit = makeHabit(from: draft, sortOrder: index, challenge: challenge)
+                    challenge.habits.append(habit)
+                    modelContext.insert(habit)
+                }
+            }
+
+            challenge.touch()
+        } else {
+            let challenge = Challenge(
+                customTitle: title.trimmingCharacters(in: .whitespacesAndNewlines),
                 colorHex: colorHex,
-                scheduleMode: draft.scheduleMode,
-                scheduledWeekdays: draft.scheduledWeekdays,
-                weeklyTarget: draft.weeklyTarget,
-                reminderTimes: draft.reminderTimes,
-                sortOrder: index,
-                challenge: challenge
+                month: month,
+                year: year,
+                startDate: startDate,
+                endDate: endDate,
+                durationWeeks: finalDuration,
+                targetWeeks: finalTarget,
+                isTimeless: isTimeless,
+                rewardText: rewardText.trimmingCharacters(in: .whitespacesAndNewlines),
+                status: .active,
+                user: users.first
             )
-            challenge.habits.append(habit)
+
+            for (index, draft) in draftHabits.enumerated() {
+                let habit = makeHabit(from: draft, sortOrder: index, challenge: challenge)
+                challenge.habits.append(habit)
+            }
+
+            modelContext.insert(challenge)
         }
 
-        modelContext.insert(challenge)
         try? modelContext.save()
         onCreate?()
+        dismiss()
+    }
+
+    private func makeHabit(from draft: DraftHabit, sortOrder: Int, challenge: Challenge) -> Habit {
+        Habit(
+            userId: users.first?.id,
+            title: draft.title.trimmingCharacters(in: .whitespacesAndNewlines),
+            note: draft.note.trimmingCharacters(in: .whitespacesAndNewlines),
+            penaltyText: "",
+            colorHex: colorHex,
+            scheduleMode: draft.scheduleMode,
+            scheduledWeekdays: draft.scheduledWeekdays,
+            weeklyTarget: draft.weeklyTarget,
+            reminderTimes: draft.reminderTimes,
+            sortOrder: sortOrder,
+            challenge: challenge
+        )
+    }
+
+    private func update(_ habit: Habit, with draft: DraftHabit, sortOrder: Int, challenge: Challenge) {
+        habit.userId = users.first?.id
+        habit.title = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        habit.note = draft.note.trimmingCharacters(in: .whitespacesAndNewlines)
+        habit.penaltyText = ""
+        habit.colorHex = colorHex
+        habit.scheduleMode = draft.scheduleMode
+        habit.scheduledWeekdays = draft.scheduledWeekdays
+        habit.weeklyTarget = draft.weeklyTarget
+        habit.reminderTimes = draft.reminderTimes
+        habit.sortOrder = sortOrder
+        habit.challenge = challenge
+        habit.touch()
+    }
+
+    private func deleteChallenge() {
+        guard let challenge else { return }
+        for habit in Array(challenge.habits) {
+            modelContext.delete(habit)
+        }
+        modelContext.delete(challenge)
+        try? modelContext.save()
         dismiss()
     }
 
@@ -490,6 +619,34 @@ struct SetupChallengeView: View {
         if last == 1 && lastTwo != 11 { return "раз" }
         if (2...4).contains(last) && !(12...14).contains(lastTwo) { return "раза" }
         return "раз"
+    }
+
+    private static func initialTitle(for challenge: Challenge?) -> String {
+        guard let challenge else { return "Тело в ритме" }
+        let customTitle = challenge.customTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        return customTitle.isEmpty ? challenge.title : customTitle
+    }
+
+    private static func initialDraftHabits(for challenge: Challenge?) -> [DraftHabit] {
+        guard let challenge else {
+            return [
+                DraftHabit(
+                    title: "Гулять 40 минут",
+                    note: "Свежий воздух без телефона в руках.",
+                    scheduledWeekdays: [1, 2, 5]
+                ),
+                DraftHabit(
+                    title: "Спорт 30 минут",
+                    note: "Тренировка дома или зал.",
+                    scheduledWeekdays: [3, 4, 6]
+                )
+            ]
+        }
+
+        return challenge.habits
+            .filter { !$0.isArchived && $0.deletedAt == nil }
+            .sorted { $0.sortOrder < $1.sortOrder }
+            .map(DraftHabit.init(habit:))
     }
 }
 
