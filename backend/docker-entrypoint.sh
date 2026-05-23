@@ -6,7 +6,7 @@ export POSTGRES_USER="${POSTGRES_USER:-habit_tracker}"
 export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-habit_tracker}"
 export DATABASE_URL="${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB}}"
 
-docker-entrypoint.sh postgres -c listen_addresses=127.0.0.1 &
+docker-entrypoint.sh postgres -c listen_addresses='*' &
 postgres_pid="$!"
 
 until pg_isready -h 127.0.0.1 -p 5432 -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" >/dev/null 2>&1; do

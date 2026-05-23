@@ -13,6 +13,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://habit_tracker:habit_tracker@127.0.0.1:5432/habit_tracker}
     ports:
       - "${API_PORT:-8001}:8000"
+      - "127.0.0.1:55433:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
