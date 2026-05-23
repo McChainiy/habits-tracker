@@ -24,6 +24,10 @@ enum HabitColor: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+enum AppConfig {
+    static let apiBaseURL = URL(string: "http://127.0.0.1:8001")!
+}
+
 @Model
 final class AppUser {
     @Attribute(.unique) var id: UUID
@@ -53,6 +57,45 @@ final class AppUser {
     }
 
     func touch() {
+        updatedAt = Date()
+    }
+}
+
+@Model
+final class SyncState {
+    @Attribute(.unique) var id: String
+    var lastPulledAt: Date?
+    var lastPushedAt: Date?
+    var lastError: String?
+    var updatedAt: Date
+
+    init(
+        id: String = "main",
+        lastPulledAt: Date? = nil,
+        lastPushedAt: Date? = nil,
+        lastError: String? = nil,
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.lastPulledAt = lastPulledAt
+        self.lastPushedAt = lastPushedAt
+        self.lastError = lastError
+        self.updatedAt = updatedAt
+    }
+
+    func markSuccess(pulledAt: Date? = nil, pushedAt: Date? = nil) {
+        if let pulledAt {
+            lastPulledAt = pulledAt
+        }
+        if let pushedAt {
+            lastPushedAt = pushedAt
+        }
+        lastError = nil
+        updatedAt = Date()
+    }
+
+    func markFailure(_ error: Error) {
+        lastError = error.localizedDescription
         updatedAt = Date()
     }
 }

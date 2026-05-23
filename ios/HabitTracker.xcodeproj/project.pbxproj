@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		24BAD097D640501F3D0E4A68 /* HabitTrackerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6301FCAA76F348B44F8BE9C7 /* HabitTrackerApp.swift */; };
 		29C252A6BADEC6941AEBB47D /* SetupChallengeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E328018C5EF4906B0E0CF18 /* SetupChallengeView.swift */; };
+		4D3B2A2D0123456789ABCDEF /* SyncClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D3B2A2C0123456789ABCDEF /* SyncClient.swift */; };
 		A48D2F736E48D6E98CD5CAC1 /* MonthDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07E83397BF98A18AA2C99BDF /* MonthDashboardView.swift */; };
 		A4D91DA59E849F1972466D65 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB27864D94CF825ABD16974F /* RootView.swift */; };
 		ADA7686774E746F5DC47573F /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6968E11C65690AEEA91C5C6 /* DesignTokens.swift */; };
@@ -18,6 +19,7 @@
 /* Begin PBXFileReference section */
 		07E83397BF98A18AA2C99BDF /* MonthDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonthDashboardView.swift; sourceTree = "<group>"; };
 		4696D8019AD500F22F901E6D /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		4D3B2A2C0123456789ABCDEF /* SyncClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncClient.swift; sourceTree = "<group>"; };
 		5E328018C5EF4906B0E0CF18 /* SetupChallengeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupChallengeView.swift; sourceTree = "<group>"; };
 		6301FCAA76F348B44F8BE9C7 /* HabitTrackerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HabitTrackerApp.swift; sourceTree = "<group>"; };
 		934C18A7F2EB31512CEB4A4E /* HabitTracker.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = HabitTracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -64,6 +66,7 @@
 			isa = PBXGroup;
 			children = (
 				4696D8019AD500F22F901E6D /* Models.swift */,
+				4D3B2A2C0123456789ABCDEF /* SyncClient.swift */,
 			);
 			path = Domain;
 			sourceTree = "<group>";
@@ -147,6 +150,7 @@
 				D8876B6997A1BB7049C1F6F5 /* Models.swift in Sources */,
 				A48D2F736E48D6E98CD5CAC1 /* MonthDashboardView.swift in Sources */,
 				A4D91DA59E849F1972466D65 /* RootView.swift in Sources */,
+				4D3B2A2D0123456789ABCDEF /* SyncClient.swift in Sources */,
 				29C252A6BADEC6941AEBB47D /* SetupChallengeView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -159,6 +163,7 @@
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
@@ -241,6 +246,7 @@
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;

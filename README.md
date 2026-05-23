@@ -51,6 +51,8 @@ make docker-migrate
 
 Для запуска на iPhone или MacBook нужен установленный Xcode. Docker не запускает нативное iOS-приложение; он используется для backend и базы данных.
 
+Синхронизация в iOS запускается автоматически каждые 10 секунд. Для iOS Simulator приложение использует `http://127.0.0.1:8001`. Для физического iPhone нужно заменить `AppConfig.apiBaseURL` в `ios/HabitTracker/Domain/Models.swift` на LAN IP MacBook, например `http://192.168.1.10:8001`, и держать MacBook и iPhone в одной сети.
+
 ## Backend
 
 Планируемый стек:

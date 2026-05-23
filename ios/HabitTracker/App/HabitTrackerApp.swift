@@ -9,6 +9,7 @@ struct HabitTrackerApp: App {
         }
         .modelContainer(for: [
             AppUser.self,
+            SyncState.self,
             Challenge.self,
             Habit.self,
             HabitEntry.self

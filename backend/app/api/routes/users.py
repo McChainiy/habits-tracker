@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +18,17 @@ async def create_user(
     payload: UserCreate,
     session: AsyncSession = Depends(get_session),
 ) -> UserRead:
-    user = User(email=payload.email, display_name=payload.display_name)
+    if payload.id is not None:
+        result = await session.execute(select(User).where(User.id == payload.id))
+        existing_user = result.scalars().first()
+        if existing_user is not None:
+            return UserRead.model_validate(existing_user)
+
+    user_kwargs = {"email": payload.email, "display_name": payload.display_name}
+    if payload.id is not None:
+        user_kwargs["id"] = payload.id
+
+    user = User(**user_kwargs)
     session.add(user)
 
     try:

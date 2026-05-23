@@ -13,7 +13,7 @@ struct MonthDashboardView: View {
 
     private var orderedHabits: [Habit] {
         challenge.habits
-            .filter { !$0.isArchived }
+            .filter { !$0.isArchived && $0.deletedAt == nil }
             .sorted { $0.sortOrder < $1.sortOrder }
     }
 
@@ -209,7 +209,7 @@ struct MonthDashboardView: View {
     private func entry(for habit: Habit, on date: Date) -> HabitEntry? {
         let normalizedDate = calendar.startOfDay(for: date)
         return habit.entries.first {
-            calendar.isDate($0.entryDate, inSameDayAs: normalizedDate)
+            calendar.isDate($0.entryDate, inSameDayAs: normalizedDate) && $0.deletedAt == nil
         }
     }
 

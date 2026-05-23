@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class UserCreate(BaseModel):
+    id: uuid.UUID | None = None
     email: str | None = Field(default=None, max_length=320)
     display_name: str = Field(default="", max_length=120)
 
