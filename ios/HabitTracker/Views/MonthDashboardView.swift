@@ -183,7 +183,7 @@ struct WeeklyDashboardView: View {
                         } label: {
                             HabitWeekCell(
                                 state: state(for: row.habit, on: date),
-                                color: Color(hex: row.habit.colorHex),
+                                color: Color(hex: colorHex(for: row)),
                                 isToday: calendar.isDateInToday(date)
                             )
                         }
@@ -223,10 +223,10 @@ struct WeeklyDashboardView: View {
         }
         .foregroundStyle(calendar.isDateInToday(date) ? AppPalette.ink : AppPalette.muted)
         .frame(maxWidth: .infinity, minHeight: 42)
-        .background(AppPalette.surface)
+        .background(calendar.isDateInToday(date) ? AppPalette.accentSoft : AppPalette.surface)
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(calendar.isDateInToday(date) ? AppPalette.ink.opacity(0.28) : AppPalette.line, lineWidth: 1)
+                .stroke(calendar.isDateInToday(date) ? AppPalette.accent : AppPalette.line, lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
@@ -241,10 +241,10 @@ struct WeeklyDashboardView: View {
             .padding(.trailing, 6)
             .frame(width: 98, alignment: .leading)
             .frame(minHeight: 42)
-            .background(Color(hex: row.habit.colorHex).opacity(0.06))
+            .background(Color(hex: colorHex(for: row)).opacity(0.06))
             .overlay(alignment: .leading) {
                 Rectangle()
-                    .fill(Color(hex: row.habit.colorHex))
+                    .fill(Color(hex: colorHex(for: row)))
                     .frame(width: 5)
             }
             .overlay(
@@ -252,6 +252,10 @@ struct WeeklyDashboardView: View {
                     .stroke(AppPalette.line, lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private func colorHex(for row: WeeklyHabitRow) -> String {
+        row.challenge?.colorHex ?? row.habit.colorHex
     }
 
     private var filterTitle: String {
@@ -418,15 +422,15 @@ private struct HabitWeekCell: View {
         case .failed:
             return AppPalette.warningSoft
         case .planned:
-            return color.opacity(0.18)
+            return color.opacity(isToday ? 0.26 : 0.18)
         case .rest:
-            return AppPalette.surface.opacity(0.42)
+            return isToday ? AppPalette.soft : AppPalette.surface.opacity(0.42)
         }
     }
 
     private var border: Color {
         if isToday {
-            return AppPalette.ink.opacity(0.30)
+            return AppPalette.accent
         }
 
         switch state {
@@ -451,12 +455,12 @@ private struct HabitFormView: View {
     @State private var selectedChallengeID: UUID?
     @State private var title = "Читать 20 минут"
     @State private var note = "Перед сном, без телефона рядом. Если день сложный, достаточно 10 минут."
-    @State private var penaltyText = ""
     @State private var colorHex = HabitColor.sage.rawValue
     @State private var scheduleMode: HabitScheduleMode = .days
     @State private var scheduledWeekdays: Set<Int> = [2, 4, 7]
     @State private var weeklyTarget = 3
-    @State private var reminderTimes: Set<String> = ["20:30"]
+    @State private var selectedReminderHour = 20
+    @State private var reminderTimes: Set<String> = ["20:00"]
 
     private let weekdays = [
         (1, "ПН"),
@@ -467,7 +471,9 @@ private struct HabitFormView: View {
         (6, "СБ"),
         (7, "ВС")
     ]
-    private let suggestedTimes = ["08:30", "20:30", "22:00"]
+    private var selectedChallenge: Challenge? {
+        challenges.first { $0.id == selectedChallengeID }
+    }
 
     private var canSave: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
@@ -501,9 +507,6 @@ private struct HabitFormView: View {
                     dismiss()
                 }
             }
-        }
-        .onAppear {
-            selectedChallengeID = selectedChallengeID ?? challenges.first?.id
         }
     }
 
@@ -549,22 +552,21 @@ private struct HabitFormView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
 
-            labeledField("Цвет") {
-                colorPicker
-            }
-
-            labeledField("Наказание за пропуск") {
-                TextField("Личный контракт", text: $penaltyText, axis: .vertical)
-                    .font(.system(size: 15))
-                    .lineLimit(2...4)
-                    .textFieldStyle(.plain)
-                    .padding(12)
-                    .background(AppPalette.surface)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .stroke(AppPalette.line, lineWidth: 1)
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            if let selectedChallenge {
+                labeledField("Цвет") {
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(Color(hex: selectedChallenge.colorHex))
+                            .frame(width: 30, height: 30)
+                        Text("Цвет челленджа")
+                            .font(.system(size: 13))
+                            .foregroundStyle(AppPalette.muted)
+                    }
+                }
+            } else {
+                labeledField("Цвет") {
+                    colorPicker
+                }
             }
         }
         .weeklyPanelStyle()
@@ -611,33 +613,52 @@ private struct HabitFormView: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(AppPalette.muted)
 
-            HStack(spacing: 8) {
-                ForEach(suggestedTimes, id: \.self) { time in
-                    let isActive = reminderTimes.contains(time)
-                    Button {
-                        if isActive {
+            HStack(spacing: 10) {
+                Picker("Час", selection: $selectedReminderHour) {
+                    ForEach(0..<24, id: \.self) { hour in
+                        Text(hourString(hour)).tag(hour)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                Button("Добавить") {
+                    reminderTimes.insert(hourString(selectedReminderHour))
+                }
+                .buttonStyle(SecondaryButtonStyle())
+            }
+
+            if !reminderTimes.isEmpty {
+                HStack(spacing: 8) {
+                    ForEach(reminderTimes.sorted(), id: \.self) { time in
+                        Button {
                             reminderTimes.remove(time)
-                        } else {
-                            reminderTimes.insert(time)
-                        }
-                    } label: {
-                        Text(time)
+                        } label: {
+                            HStack(spacing: 5) {
+                                Text(time)
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 9, weight: .bold))
+                            }
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(isActive ? AppPalette.accent : AppPalette.muted)
+                            .foregroundStyle(AppPalette.accent)
                             .padding(.horizontal, 12)
                             .frame(height: 34)
-                            .background(isActive ? AppPalette.accentSoft : AppPalette.surface)
+                            .background(AppPalette.accentSoft)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .stroke(isActive ? AppPalette.accent : AppPalette.line, lineWidth: 1)
+                                    .stroke(AppPalette.accent, lineWidth: 1)
                             )
                             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
         .weeklyPanelStyle()
+    }
+
+    private func hourString(_ hour: Int) -> String {
+        String(format: "%02d:00", hour)
     }
 
     private var colorPicker: some View {
@@ -714,7 +735,7 @@ private struct HabitFormView: View {
     }
 
     private func saveHabit() {
-        let challenge = challenges.first { $0.id == selectedChallengeID }
+        let challenge = selectedChallenge
         let nextSortOrder = if let challenge {
             (challenge.habits.map(\.sortOrder).max() ?? -1) + 1
         } else {
@@ -724,8 +745,8 @@ private struct HabitFormView: View {
             userId: challenge?.user?.id,
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             note: note.trimmingCharacters(in: .whitespacesAndNewlines),
-            penaltyText: penaltyText.trimmingCharacters(in: .whitespacesAndNewlines),
-            colorHex: colorHex,
+            penaltyText: "",
+            colorHex: challenge?.colorHex ?? colorHex,
             scheduleMode: scheduleMode,
             scheduledWeekdays: scheduledWeekdays,
             weeklyTarget: weeklyTarget,

@@ -5,8 +5,6 @@ private struct DraftHabit: Identifiable {
     let id = UUID()
     var title = ""
     var note = ""
-    var penaltyText = ""
-    var colorHex: String
     var scheduleMode: HabitScheduleMode = .days
     var scheduledWeekdays: Set<Int>
     var weeklyTarget = 3
@@ -25,7 +23,7 @@ struct SetupChallengeView: View {
     @State private var title = "Тело в ритме"
     @State private var selectedStartDate = Date()
     @State private var colorHex = HabitColor.sage.rawValue
-    @State private var durationWeeks = 4
+    @State private var durationWeeksText = "4"
     @State private var targetWeeks = 3
     @State private var isTimeless = false
     @State private var rewardText = "После челленджа я покупаю себе новую книгу и выделяю вечер без дел."
@@ -33,15 +31,11 @@ struct SetupChallengeView: View {
         DraftHabit(
             title: "Гулять 40 минут",
             note: "Свежий воздух без телефона в руках.",
-            penaltyText: "Перевести 500 ₽ в фонд, который я не поддерживаю.",
-            colorHex: HabitColor.sage.rawValue,
             scheduledWeekdays: [1, 2, 5]
         ),
         DraftHabit(
             title: "Спорт 30 минут",
             note: "Тренировка дома или зал.",
-            penaltyText: "Без сериалов до следующей тренировки.",
-            colorHex: HabitColor.blue.rawValue,
             scheduledWeekdays: [3, 4, 6]
         )
     ]
@@ -60,8 +54,13 @@ struct SetupChallengeView: View {
         min(max(targetWeeks, 1), max(durationWeeks, 1))
     }
 
+    private var durationWeeks: Int {
+        min(max(Int(durationWeeksText) ?? 1, 1), 100)
+    }
+
     private var canCreate: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !durationWeeksText.isEmpty &&
         !draftHabits.isEmpty &&
         draftHabits.count <= 5 &&
         draftHabits.allSatisfy { draft in
@@ -91,9 +90,19 @@ struct SetupChallengeView: View {
         .background(AppPalette.paper.ignoresSafeArea())
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
-        .onChange(of: durationWeeks) { _, newValue in
-            durationWeeks = min(max(newValue, 1), 100)
-            targetWeeks = min(max(targetWeeks, 1), durationWeeks)
+        .onChange(of: durationWeeksText) { _, newValue in
+            let digits = String(newValue.filter(\.isNumber))
+            let sanitized: String
+            if let value = Int(digits), !digits.isEmpty {
+                sanitized = String(min(max(value, 1), 100))
+            } else {
+                sanitized = ""
+            }
+
+            if sanitized != newValue {
+                durationWeeksText = sanitized
+            }
+            targetWeeks = min(max(targetWeeks, 1), max(durationWeeks, 1))
         }
         .onChange(of: targetWeeks) { _, newValue in
             targetWeeks = min(max(newValue, 1), max(durationWeeks, 1))
@@ -140,10 +149,8 @@ struct SetupChallengeView: View {
 
             if draftHabits.count < 5 {
                 Button {
-                    let color = HabitColor.allCases[draftHabits.count % HabitColor.allCases.count]
                     draftHabits.append(
                         DraftHabit(
-                            colorHex: color.rawValue,
                             scheduledWeekdays: [1, 3, 5]
                         )
                     )
@@ -159,7 +166,7 @@ struct SetupChallengeView: View {
     private func habitRow(_ habit: Binding<DraftHabit>) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 10) {
-                colorDot(colorHex: habit.wrappedValue.colorHex)
+                colorDot(colorHex: colorHex)
                     .padding(.top, 5)
 
                 VStack(alignment: .leading, spacing: 6) {
@@ -175,27 +182,21 @@ struct SetupChallengeView: View {
                 }
 
                 scheduleModePicker(selection: habit.scheduleMode)
-            }
 
-            colorPicker(selection: habit.colorHex)
+                Button {
+                    deleteHabit(habit.wrappedValue)
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(IconButtonStyle())
+                .accessibilityLabel("Удалить привычку")
+            }
 
             if habit.wrappedValue.scheduleMode == .days {
                 weekdayPicker(selection: habit.scheduledWeekdays)
             } else {
                 weeklyTargetStepper(value: habit.weeklyTarget)
             }
-
-            TextField("Наказание за пропуск", text: habit.penaltyText, axis: .vertical)
-                .font(.system(size: 13))
-                .foregroundStyle(AppPalette.ink)
-                .lineLimit(1...3)
-                .padding(10)
-                .background(AppPalette.paper)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(AppPalette.line, lineWidth: 1)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
         .padding(.vertical, 12)
         .overlay(alignment: .bottom) {
@@ -211,14 +212,27 @@ struct SetupChallengeView: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(AppPalette.muted)
 
-            Stepper(value: $durationWeeks, in: 1...100) {
+            HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Срок челленджа")
                         .font(.system(size: 15, weight: .semibold))
-                    Text("\(durationWeeks) \(weekWord(durationWeeks))")
+                    Text("От 1 до 100 недель.")
                         .font(.system(size: 13))
                         .foregroundStyle(AppPalette.muted)
                 }
+                Spacer()
+                TextField("4", text: $durationWeeksText)
+                    .keyboardType(.numberPad)
+                    .multilineTextAlignment(.center)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(AppPalette.ink)
+                    .frame(width: 82, height: 42)
+                    .background(AppPalette.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(AppPalette.line, lineWidth: 1)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
             .disabled(isTimeless)
             .opacity(isTimeless ? 0.45 : 1)
@@ -246,7 +260,7 @@ struct SetupChallengeView: View {
             .disabled(isTimeless)
             .opacity(isTimeless ? 0.45 : 1)
 
-            if !isTimeless {
+            if !isTimeless && durationWeeks > 1 {
                 Slider(
                     value: Binding(
                         get: { Double(clampedTargetWeeks) },
@@ -432,8 +446,8 @@ struct SetupChallengeView: View {
                 userId: users.first?.id,
                 title: draft.title.trimmingCharacters(in: .whitespacesAndNewlines),
                 note: draft.note.trimmingCharacters(in: .whitespacesAndNewlines),
-                penaltyText: draft.penaltyText.trimmingCharacters(in: .whitespacesAndNewlines),
-                colorHex: draft.colorHex,
+                penaltyText: "",
+                colorHex: colorHex,
                 scheduleMode: draft.scheduleMode,
                 scheduledWeekdays: draft.scheduledWeekdays,
                 weeklyTarget: draft.weeklyTarget,
@@ -448,6 +462,10 @@ struct SetupChallengeView: View {
         try? modelContext.save()
         onCreate?()
         dismiss()
+    }
+
+    private func deleteHabit(_ habit: DraftHabit) {
+        draftHabits.removeAll { $0.id == habit.id }
     }
 
     private func weekWord(_ value: Int) -> String {
