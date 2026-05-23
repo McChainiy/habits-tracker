@@ -1,5 +1,8 @@
 import SwiftData
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct WeeklyDashboardView: View {
     @Environment(\.modelContext) private var modelContext
@@ -10,7 +13,8 @@ struct WeeklyDashboardView: View {
     let challenges: [Challenge]
 
     @State private var sheet: DashboardSheet?
-    @State private var isCreateDialogPresented = false
+    @State private var isCreateMenuPresented = false
+    @State private var highlightedCreateAction: CreateAction?
     @State private var selectedFilter: ChallengeFilter = .all
     @State private var highlightedChallengeID: UUID?
 
@@ -75,32 +79,21 @@ struct WeeklyDashboardView: View {
             }
             .background(AppPalette.paper.ignoresSafeArea())
 
-            Button {
-                isCreateDialogPresented = true
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(AppPalette.surface)
-                    .frame(width: 58, height: 58)
-                    .background(AppPalette.ink)
-                    .clipShape(Circle())
-                    .shadow(color: AppPalette.ink.opacity(0.24), radius: 18, x: 0, y: 12)
+            if isCreateMenuPresented {
+                Color.black.opacity(0.001)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        closeCreateMenu()
+                    }
             }
-            .buttonStyle(.plain)
-            .padding(24)
-            .accessibilityLabel("Создать")
+
+            createLauncher
+                .padding(24)
         }
         .navigationBarTitleDisplayMode(.inline)
-        .confirmationDialog("Что добавить", isPresented: $isCreateDialogPresented, titleVisibility: .visible) {
-            Button("Добавить привычку") {
-                sheet = .newHabit
-            }
-            Button("Добавить челлендж") {
-                sheet = .newChallenge
-            }
-        }
         .sheet(item: $sheet, onDismiss: {
             highlightedChallengeID = nil
+            closeCreateMenu()
         }) { item in
             NavigationStack {
                 switch item {
@@ -115,6 +108,114 @@ struct WeeklyDashboardView: View {
                 }
             }
             .presentationDetents([.large])
+        }
+    }
+
+    private var createLauncher: some View {
+        ZStack(alignment: .bottomTrailing) {
+            if isCreateMenuPresented {
+                createOption(.challenge)
+                    .offset(x: -4, y: -142)
+                    .transition(.asymmetric(
+                        insertion: .scale(scale: 0.82, anchor: .bottomTrailing).combined(with: .opacity),
+                        removal: .opacity
+                    ))
+
+                createOption(.habit)
+                    .offset(x: -86, y: -78)
+                    .transition(.asymmetric(
+                        insertion: .scale(scale: 0.82, anchor: .bottomTrailing).combined(with: .opacity),
+                        removal: .opacity
+                    ))
+            }
+
+            Image(systemName: "plus")
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(AppPalette.surface)
+                .rotationEffect(.degrees(isCreateMenuPresented ? 45 : 0))
+                .frame(width: 58, height: 58)
+                .background(AppPalette.ink)
+                .clipShape(Circle())
+                .shadow(color: AppPalette.ink.opacity(0.24), radius: 18, x: 0, y: 12)
+                .contentShape(Circle())
+                .onTapGesture {
+                    toggleCreateMenu()
+                }
+                .gesture(createDragGesture)
+                .accessibilityLabel("Создать")
+                .accessibilityAddTraits(.isButton)
+        }
+        .frame(width: 236, height: 220, alignment: .bottomTrailing)
+    }
+
+    private func toggleCreateMenu() {
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+            isCreateMenuPresented.toggle()
+            highlightedCreateAction = nil
+        }
+    }
+
+    private func createOption(_ action: CreateAction) -> some View {
+        Button {
+            presentCreateAction(action)
+        } label: {
+            HStack(spacing: 9) {
+                Image(systemName: action.systemImage)
+                    .font(.system(size: 14, weight: .bold))
+                Text(action.title)
+                    .font(.system(size: 14, weight: .semibold))
+            }
+            .foregroundStyle(highlightedCreateAction == action ? AppPalette.surface : AppPalette.ink)
+            .padding(.horizontal, 14)
+            .frame(height: 42)
+            .background(highlightedCreateAction == action ? AppPalette.ink : AppPalette.surface)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(highlightedCreateAction == action ? AppPalette.ink : AppPalette.line, lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .shadow(color: AppPalette.ink.opacity(0.14), radius: 16, x: 0, y: 10)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var createDragGesture: some Gesture {
+        DragGesture(minimumDistance: 8)
+            .onChanged { value in
+                guard value.translation.height < -8 else { return }
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                    isCreateMenuPresented = true
+                    highlightedCreateAction = createAction(for: value.translation)
+                }
+            }
+            .onEnded { value in
+                if let action = createAction(for: value.translation) {
+                    presentCreateAction(action)
+                } else if isCreateMenuPresented {
+                    highlightedCreateAction = nil
+                }
+            }
+    }
+
+    private func createAction(for translation: CGSize) -> CreateAction? {
+        guard translation.height < -28 else { return nil }
+        return translation.height < -96 ? .challenge : .habit
+    }
+
+    private func presentCreateAction(_ action: CreateAction) {
+        closeCreateMenu()
+        switch action {
+        case .habit:
+            sheet = .newHabit
+        case .challenge:
+            sheet = .newChallenge
+        }
+    }
+
+    private func closeCreateMenu() {
+        withAnimation(.spring(response: 0.24, dampingFraction: 0.84)) {
+            isCreateMenuPresented = false
+            highlightedCreateAction = nil
         }
     }
 
@@ -317,11 +418,26 @@ struct WeeklyDashboardView: View {
         case .days:
             return habit.scheduledWeekdays.contains(calendar.mondayWeekdayIndex(for: date))
         case .count:
-            let completedThisWeek = weekDates.filter {
-                entry(for: habit, on: $0)?.status == .done
-            }.count
-            return completedThisWeek < max(habit.weeklyTarget, 1)
+            return plannedDatesForWeeklyTarget(habit).contains(calendar.startOfDay(for: date))
         }
+    }
+
+    private func plannedDatesForWeeklyTarget(_ habit: Habit) -> Set<Date> {
+        let target = min(max(habit.weeklyTarget, 1), weekDates.count)
+        let completedThisWeek = weekDates.filter {
+            entry(for: habit, on: $0)?.status == .done
+        }.count
+        let remainingTarget = max(target - completedThisWeek, 0)
+        guard remainingTarget > 0 else { return [] }
+
+        let today = calendar.startOfDay(for: Date())
+        let candidates = weekDates
+            .map { calendar.startOfDay(for: $0) }
+            .filter { date in
+                date >= today && entry(for: habit, on: date) == nil
+            }
+
+        return Set(candidates.prefix(remainingTarget))
     }
 
     private func entry(for habit: Habit, on date: Date) -> HabitEntry? {
@@ -372,6 +488,25 @@ private enum ChallengeFilter: Equatable {
     case all
     case challenge(UUID)
     case noChallenge
+}
+
+private enum CreateAction {
+    case habit
+    case challenge
+
+    var title: String {
+        switch self {
+        case .habit: return "Привычку"
+        case .challenge: return "Челлендж"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .habit: return "checkmark.circle"
+        case .challenge: return "flag"
+        }
+    }
 }
 
 private enum DashboardSheet: Identifiable {
@@ -564,7 +699,12 @@ private struct HabitFormView: View {
                 }
             }
             .padding(20)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                hideKeyboard()
+            }
         }
+        .scrollDismissesKeyboard(.interactively)
         .background(AppPalette.paper.ignoresSafeArea())
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -922,4 +1062,10 @@ private extension Calendar {
         let weekday = component(.weekday, from: date)
         return ((weekday + 5) % 7) + 1
     }
+}
+
+func hideKeyboard() {
+    #if canImport(UIKit)
+    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    #endif
 }

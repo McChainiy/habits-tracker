@@ -136,7 +136,12 @@ struct SetupChallengeView: View {
                 }
             }
             .padding(20)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                hideKeyboard()
+            }
         }
+        .scrollDismissesKeyboard(.interactively)
         .background(AppPalette.paper.ignoresSafeArea())
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
