@@ -18,21 +18,36 @@ struct WeeklyDashboardView: View {
     @State private var selectedFilter: ChallengeFilter = .all
     @State private var highlightedChallengeID: UUID?
     @State private var challengePressFeedbackTask: Task<Void, Never>?
+    @State private var isMonthCalendarPresented = false
+    @State private var selectedWeekStart = Calendar.current.startOfWeek(for: Date())
+    @State private var visibleMonthDate = Calendar.current.startOfMonth(for: Date())
 
     private let calendar = Calendar.current
     private let weekdays = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"]
 
     private var weekDates: [Date] {
-        let weekStart = calendar.startOfWeek(for: Date())
         return (0..<7).compactMap {
-            calendar.date(byAdding: .day, value: $0, to: weekStart)
+            calendar.date(byAdding: .day, value: $0, to: selectedWeekStart)
         }
     }
 
-    private var visibleChallenges: [Challenge] {
+    private var selectedWeekEnd: Date {
+        calendar.date(byAdding: .day, value: 6, to: selectedWeekStart)
+            .map(calendar.startOfDay(for:)) ?? selectedWeekStart
+    }
+
+    private var activeChallenges: [Challenge] {
         challenges
             .filter { $0.deletedAt == nil }
             .sorted { $0.startDate < $1.startDate }
+    }
+
+    private var visibleChallenges: [Challenge] {
+        activeChallenges
+            .filter {
+                wasCreatedBySelectedWeek($0.createdAt) &&
+                isActiveDuringSelectedWeek($0)
+            }
     }
 
     private var orphanHabits: [Habit] {
@@ -40,7 +55,8 @@ struct WeeklyDashboardView: View {
             .filter { habit in
                 habit.challenge == nil &&
                 !habit.isArchived &&
-                habit.deletedAt == nil
+                habit.deletedAt == nil &&
+                wasCreatedBySelectedWeek(habit.createdAt)
             }
             .sorted { $0.sortOrder < $1.sortOrder }
     }
@@ -73,6 +89,9 @@ struct WeeklyDashboardView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     header
+                    if isMonthCalendarPresented {
+                        monthCalendar
+                    }
                     weekGrid
                 }
                 .padding(20)
@@ -102,11 +121,11 @@ struct WeeklyDashboardView: View {
             NavigationStack {
                 switch item {
                 case .newHabit:
-                    HabitFormView(challenges: visibleChallenges)
+                    HabitFormView(challenges: activeChallenges)
                 case .newChallenge:
                     SetupChallengeView()
                 case .editHabit(let habit):
-                    HabitFormView(challenges: visibleChallenges, habit: habit)
+                    HabitFormView(challenges: activeChallenges, habit: habit)
                 case .editChallenge(let challenge):
                     SetupChallengeView(challenge: challenge)
                 }
@@ -225,13 +244,50 @@ struct WeeklyDashboardView: View {
 
     private var header: some View {
         HStack(alignment: .top, spacing: 16) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Общий план")
-                    .font(.system(size: 14))
-                    .foregroundStyle(AppPalette.muted)
-                Text("Эта неделя")
-                    .font(.system(size: 32, weight: .semibold))
-                    .foregroundStyle(AppPalette.ink)
+            HStack(alignment: .top, spacing: 12) {
+                Button {
+                    toggleMonthCalendar()
+                } label: {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(isMonthCalendarPresented ? AppPalette.surface : AppPalette.ink)
+                        .frame(width: 38, height: 38)
+                        .background(isMonthCalendarPresented ? AppPalette.ink : AppPalette.surface)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(isMonthCalendarPresented ? AppPalette.ink : AppPalette.line, lineWidth: 1)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isMonthCalendarPresented ? "Закрыть календарь" : "Открыть календарь")
+
+                VStack(alignment: .leading, spacing: 7) {
+                    Text(dashboardTitle)
+                        .font(.system(size: 32, weight: .semibold))
+                        .foregroundStyle(AppPalette.ink)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.76)
+
+                    if shouldShowCurrentWeekButton {
+                        Button {
+                            selectCurrentWeek()
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "arrow.uturn.backward")
+                                    .font(.system(size: 11, weight: .bold))
+                                Text("Эта неделя")
+                                    .font(.system(size: 12, weight: .semibold))
+                            }
+                            .foregroundStyle(AppPalette.accent)
+                            .padding(.horizontal, 10)
+                            .frame(height: 28)
+                            .background(AppPalette.accentSoft)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
             }
 
             Spacer()
@@ -277,6 +333,225 @@ struct WeeklyDashboardView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
         }
+    }
+
+    private var dashboardTitle: String {
+        if isMonthCalendarPresented {
+            return monthTitle(for: visibleMonthDate)
+        }
+
+        if isCurrentWeekSelected {
+            return "Эта неделя"
+        }
+
+        return weekRangeTitle(for: selectedWeekStart)
+    }
+
+    private var isCurrentWeekSelected: Bool {
+        calendar.isDate(selectedWeekStart, inSameDayAs: calendar.startOfWeek(for: Date()))
+    }
+
+    private var shouldShowCurrentWeekButton: Bool {
+        !isCurrentWeekSelected ||
+        (isMonthCalendarPresented && !calendar.isDate(visibleMonthDate, equalTo: Date(), toGranularity: .month))
+    }
+
+    private func toggleMonthCalendar() {
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+            if !isMonthCalendarPresented {
+                visibleMonthDate = calendar.startOfMonth(for: selectedWeekStart)
+            }
+            isMonthCalendarPresented.toggle()
+        }
+    }
+
+    private func selectCurrentWeek() {
+        let currentWeekStart = calendar.startOfWeek(for: Date())
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+            selectedWeekStart = currentWeekStart
+            visibleMonthDate = calendar.startOfMonth(for: Date())
+            isMonthCalendarPresented = false
+        }
+    }
+
+    private var monthCalendar: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                Button {
+                    shiftVisibleMonth(by: -1)
+                } label: {
+                    Image(systemName: "chevron.left")
+                }
+                .buttonStyle(IconButtonStyle())
+                .accessibilityLabel("Предыдущий месяц")
+
+                Spacer()
+
+                Text(monthYearTitle(for: visibleMonthDate))
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppPalette.ink)
+
+                Spacer()
+
+                Button {
+                    shiftVisibleMonth(by: 1)
+                } label: {
+                    Image(systemName: "chevron.right")
+                }
+                .buttonStyle(IconButtonStyle())
+                .accessibilityLabel("Следующий месяц")
+            }
+
+            HStack(spacing: 6) {
+                ForEach(weekdays, id: \.self) { weekday in
+                    Text(weekday)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(AppPalette.muted)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+
+            VStack(spacing: 6) {
+                ForEach(Array(monthWeeks.enumerated()), id: \.offset) { pair in
+                    monthWeekRow(pair.element)
+                }
+            }
+        }
+        .weeklyPanelStyle()
+        .transition(.opacity.combined(with: .move(edge: .top)))
+    }
+
+    private func monthWeekRow(_ week: [Date]) -> some View {
+        let weekStart = week.first.map { calendar.startOfWeek(for: $0) } ?? visibleMonthDate
+        let isSelected = calendar.isDate(weekStart, inSameDayAs: selectedWeekStart)
+
+        return HStack(spacing: 6) {
+            ForEach(week, id: \.self) { date in
+                monthDayButton(date)
+            }
+        }
+        .padding(4)
+        .background(isSelected ? AppPalette.accentSoft : Color.clear)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(isSelected ? AppPalette.accent : Color.clear, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private func monthDayButton(_ date: Date) -> some View {
+        let isInVisibleMonth = calendar.isDate(date, equalTo: visibleMonthDate, toGranularity: .month)
+        let isToday = calendar.isDateInToday(date)
+        let summary = monthEntrySummary(on: date)
+
+        return Button {
+            selectWeek(containing: date)
+        } label: {
+            VStack(spacing: 4) {
+                Text(date.formatted(.dateTime.day()))
+                    .font(.system(size: 13, weight: isToday ? .bold : .semibold))
+                    .foregroundStyle(isInVisibleMonth ? AppPalette.ink : AppPalette.muted.opacity(0.6))
+                    .frame(maxWidth: .infinity)
+
+                Circle()
+                    .fill(summary.color)
+                    .frame(width: 5, height: 5)
+                    .opacity(summary == .empty ? 0 : (isInVisibleMonth ? 1 : 0.45))
+            }
+            .frame(maxWidth: .infinity, minHeight: 38)
+            .background(isToday ? AppPalette.surface : Color.clear)
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(isToday ? AppPalette.accent : Color.clear, lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .opacity(isInVisibleMonth ? 1 : 0.42)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Выбрать неделю с \(date.formatted(.dateTime.day().month(.wide)))")
+    }
+
+    private var monthWeeks: [[Date]] {
+        let monthStart = calendar.startOfMonth(for: visibleMonthDate)
+        guard let nextMonth = calendar.date(byAdding: .month, value: 1, to: monthStart),
+              let monthEnd = calendar.date(byAdding: .day, value: -1, to: nextMonth) else {
+            return []
+        }
+
+        var weeks: [[Date]] = []
+        var weekStart = calendar.startOfWeek(for: monthStart)
+        let lastWeekStart = calendar.startOfWeek(for: monthEnd)
+
+        while weekStart <= lastWeekStart {
+            let week = (0..<7).compactMap {
+                calendar.date(byAdding: .day, value: $0, to: weekStart)
+            }
+            weeks.append(week)
+            guard let nextWeek = calendar.date(byAdding: .day, value: 7, to: weekStart) else {
+                break
+            }
+            weekStart = nextWeek
+        }
+
+        return weeks
+    }
+
+    private func selectWeek(containing date: Date) {
+        let weekStart = calendar.startOfWeek(for: date)
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+            selectedWeekStart = weekStart
+            visibleMonthDate = calendar.startOfMonth(for: date)
+            isMonthCalendarPresented = false
+        }
+    }
+
+    private func shiftVisibleMonth(by offset: Int) {
+        guard let month = calendar.date(byAdding: .month, value: offset, to: visibleMonthDate) else { return }
+        withAnimation(.spring(response: 0.24, dampingFraction: 0.88)) {
+            visibleMonthDate = calendar.startOfMonth(for: month)
+        }
+    }
+
+    private func monthEntrySummary(on date: Date) -> MonthEntrySummary {
+        let statuses = rows.compactMap { entry(for: $0.habit, on: date)?.status }
+        if statuses.contains(.failed) {
+            return .failed
+        }
+        if statuses.contains(.done) {
+            return .done
+        }
+        if statuses.contains(.skipped) {
+            return .skipped
+        }
+        return .empty
+    }
+
+    private func monthTitle(for date: Date) -> String {
+        formatted(date, pattern: "LLLL")
+    }
+
+    private func monthYearTitle(for date: Date) -> String {
+        formatted(date, pattern: "LLLL yyyy")
+    }
+
+    private func weekRangeTitle(for startDate: Date) -> String {
+        let start = calendar.startOfDay(for: startDate)
+        let end = calendar.date(byAdding: .day, value: 6, to: start) ?? start
+        let startDay = calendar.component(.day, from: start)
+        let endDay = calendar.component(.day, from: end)
+
+        if calendar.isDate(start, equalTo: end, toGranularity: .month) {
+            return "\(startDay)-\(endDay) \(monthTitle(for: end))"
+        }
+
+        return "\(startDay) \(formatted(start, pattern: "LLL")) - \(endDay) \(formatted(end, pattern: "LLL"))"
+    }
+
+    private func formatted(_ date: Date, pattern: String) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ru_RU")
+        formatter.dateFormat = pattern
+        return formatter.string(from: date)
     }
 
     private var weekGrid: some View {
@@ -429,7 +704,7 @@ struct WeeklyDashboardView: View {
         case .all:
             return "\(visibleChallenges.count) \(challengeWord(visibleChallenges.count))"
         case .challenge(let id):
-            return visibleChallenges.first { $0.id == id }?.title ?? "Челлендж"
+            return activeChallenges.first { $0.id == id }?.title ?? "Челлендж"
         case .noChallenge:
             return "Без челленджа"
         }
@@ -437,9 +712,28 @@ struct WeeklyDashboardView: View {
 
     private func rows(for challenge: Challenge) -> [WeeklyHabitRow] {
         challenge.habits
-            .filter { !$0.isArchived && $0.deletedAt == nil }
+            .filter {
+                !$0.isArchived &&
+                $0.deletedAt == nil &&
+                wasCreatedBySelectedWeek($0.createdAt)
+            }
             .sorted { $0.sortOrder < $1.sortOrder }
             .map { WeeklyHabitRow(challenge: challenge, habit: $0) }
+    }
+
+    private func wasCreatedBySelectedWeek(_ createdAt: Date) -> Bool {
+        calendar.startOfDay(for: createdAt) <= selectedWeekEnd
+    }
+
+    private func isActiveDuringSelectedWeek(_ challenge: Challenge) -> Bool {
+        let challengeStart = calendar.startOfDay(for: challenge.startDate)
+        let challengeEnd = calendar.startOfDay(for: challenge.endDate)
+
+        if challenge.isTimeless {
+            return challengeStart <= selectedWeekEnd
+        }
+
+        return challengeStart <= selectedWeekEnd && challengeEnd >= selectedWeekStart
     }
 
     private func state(for habit: Habit, on date: Date) -> HabitWeekCell.State {
@@ -456,6 +750,11 @@ struct WeeklyDashboardView: View {
     }
 
     private func isPlanned(_ habit: Habit, on date: Date) -> Bool {
+        let normalizedDate = calendar.startOfDay(for: date)
+        guard calendar.startOfDay(for: habit.createdAt) <= normalizedDate else {
+            return false
+        }
+
         switch habit.scheduleMode {
         case .days:
             return habit.scheduledWeekdays.contains(calendar.mondayWeekdayIndex(for: date))
@@ -473,10 +772,14 @@ struct WeeklyDashboardView: View {
         guard remainingTarget > 0 else { return [] }
 
         let today = calendar.startOfDay(for: Date())
+        let selectedWeekIsCurrent = calendar.isDate(selectedWeekStart, inSameDayAs: calendar.startOfWeek(for: Date()))
+        let habitStartDate = calendar.startOfDay(for: habit.createdAt)
         let candidates = weekDates
             .map { calendar.startOfDay(for: $0) }
             .filter { date in
-                date >= today && entry(for: habit, on: date) == nil
+                date >= habitStartDate &&
+                (!selectedWeekIsCurrent || date >= today) &&
+                entry(for: habit, on: date) == nil
             }
 
         return Set(candidates.prefix(remainingTarget))
@@ -543,6 +846,26 @@ private enum ChallengeFilter: Equatable {
     case all
     case challenge(UUID)
     case noChallenge
+}
+
+private enum MonthEntrySummary: Equatable {
+    case done
+    case failed
+    case skipped
+    case empty
+
+    var color: Color {
+        switch self {
+        case .done:
+            return AppPalette.accent
+        case .failed:
+            return AppPalette.warning
+        case .skipped:
+            return AppPalette.sun
+        case .empty:
+            return Color.clear
+        }
+    }
 }
 
 private enum CreateAction {
@@ -1121,6 +1444,11 @@ private extension View {
 }
 
 private extension Calendar {
+    func startOfMonth(for date: Date) -> Date {
+        let components = dateComponents([.year, .month], from: date)
+        return self.date(from: components).map(startOfDay(for:)) ?? startOfDay(for: date)
+    }
+
     func startOfWeek(for date: Date) -> Date {
         let normalizedDate = startOfDay(for: date)
         let weekday = component(.weekday, from: normalizedDate)
