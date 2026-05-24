@@ -66,7 +66,9 @@ async def push_changes(
     await session.flush()
 
     for item in payload.habit_entries:
-        changed_entry_ids.add(await upsert_habit_entry(session, user.id, item))
+        changed_entry_id = await upsert_habit_entry(session, user.id, item)
+        if changed_entry_id is not None:
+            changed_entry_ids.add(changed_entry_id)
 
     await session.commit()
 
@@ -148,19 +150,31 @@ async def upsert_challenge(
         challenge = Challenge(
             id=item.id,
             user_id=user_id,
+            custom_title=item.custom_title,
+            color_hex=item.color_hex,
             month=item.month,
             year=item.year,
             start_date=item.start_date,
             end_date=item.end_date,
+            duration_weeks=item.duration_weeks,
+            target_weeks=item.target_weeks,
+            is_timeless=item.is_timeless,
+            reward_text=item.reward_text,
             status=parse_challenge_status(item.status),
             created_at=item.created_at,
         )
         session.add(challenge)
     else:
+        challenge.custom_title = item.custom_title
+        challenge.color_hex = item.color_hex
         challenge.month = item.month
         challenge.year = item.year
         challenge.start_date = item.start_date
         challenge.end_date = item.end_date
+        challenge.duration_weeks = item.duration_weeks
+        challenge.target_weeks = item.target_weeks
+        challenge.is_timeless = item.is_timeless
+        challenge.reward_text = item.reward_text
         challenge.status = parse_challenge_status(item.status)
 
     challenge.updated_at = now
@@ -169,9 +183,13 @@ async def upsert_challenge(
 
 
 async def upsert_habit(session: AsyncSession, user_id: uuid.UUID, item: SyncHabit) -> uuid.UUID:
-    challenge = await session.get(Challenge, item.challenge_id)
-    if challenge is None or challenge.user_id != user_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Challenge not found")
+    challenge_id = item.challenge_id
+    if item.challenge_id is not None:
+        challenge = await session.get(Challenge, item.challenge_id)
+        if challenge is not None and challenge.user_id != user_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Challenge belongs to another user")
+        if challenge is None:
+            challenge_id = None
 
     habit = await session.get(Habit, item.id)
     now = utcnow()
@@ -186,22 +204,30 @@ async def upsert_habit(session: AsyncSession, user_id: uuid.UUID, item: SyncHabi
         habit = Habit(
             id=item.id,
             user_id=user_id,
-            challenge_id=item.challenge_id,
+            challenge_id=challenge_id,
             title=item.title,
             note=item.note,
             penalty_text=item.penalty_text,
             color_hex=item.color_hex,
+            schedule_mode=item.schedule_mode,
+            scheduled_weekdays=item.scheduled_weekdays,
+            weekly_target=item.weekly_target,
+            reminder_times=item.reminder_times,
             sort_order=item.sort_order,
             is_archived=item.is_archived,
             created_at=item.created_at,
         )
         session.add(habit)
     else:
-        habit.challenge_id = item.challenge_id
+        habit.challenge_id = challenge_id
         habit.title = item.title
         habit.note = item.note
         habit.penalty_text = item.penalty_text
         habit.color_hex = item.color_hex
+        habit.schedule_mode = item.schedule_mode
+        habit.scheduled_weekdays = item.scheduled_weekdays
+        habit.weekly_target = item.weekly_target
+        habit.reminder_times = item.reminder_times
         habit.sort_order = item.sort_order
         habit.is_archived = item.is_archived
 
@@ -214,10 +240,12 @@ async def upsert_habit_entry(
     session: AsyncSession,
     user_id: uuid.UUID,
     item: SyncHabitEntry,
-) -> uuid.UUID:
+) -> uuid.UUID | None:
     habit = await session.get(Habit, item.habit_id)
-    if habit is None or habit.user_id != user_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Habit not found")
+    if habit is None:
+        return None
+    if habit.user_id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Habit belongs to another user")
 
     entry = await session.get(HabitEntry, item.id)
     now = utcnow()

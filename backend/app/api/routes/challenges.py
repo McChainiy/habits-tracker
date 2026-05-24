@@ -55,10 +55,16 @@ async def create_challenge(
 
     challenge = Challenge(
         user_id=user.id,
+        custom_title=payload.custom_title,
+        color_hex=payload.color_hex,
         month=payload.month,
         year=payload.year,
         start_date=start_date,
         end_date=end_date,
+        duration_weeks=payload.duration_weeks,
+        target_weeks=payload.target_weeks,
+        is_timeless=payload.is_timeless,
+        reward_text=payload.reward_text,
         status=ChallengeStatus.ACTIVE,
     )
 
@@ -70,6 +76,10 @@ async def create_challenge(
                 note=item.note,
                 penalty_text=item.penalty_text,
                 color_hex=item.color_hex,
+                schedule_mode=item.schedule_mode,
+                scheduled_weekdays=item.scheduled_weekdays,
+                weekly_target=item.weekly_target,
+                reminder_times=item.reminder_times,
                 sort_order=index,
             )
         )

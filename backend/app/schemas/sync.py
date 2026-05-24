@@ -10,10 +10,16 @@ class SyncChallenge(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
+    custom_title: str = Field(default="", max_length=120)
+    color_hex: str = Field(default="#62766A", min_length=4, max_length=16)
     month: int = Field(ge=1, le=12)
     year: int = Field(ge=2024, le=2100)
     start_date: date
     end_date: date
+    duration_weeks: int = Field(default=4, ge=1, le=100)
+    target_weeks: int = Field(default=3, ge=1, le=100)
+    is_timeless: bool = False
+    reward_text: str = ""
     status: str
     created_at: datetime
     updated_at: datetime
@@ -24,11 +30,15 @@ class SyncHabit(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    challenge_id: uuid.UUID
+    challenge_id: uuid.UUID | None = None
     title: str = Field(min_length=1, max_length=120)
     note: str = ""
-    penalty_text: str = Field(min_length=1)
+    penalty_text: str = ""
     color_hex: str = Field(default="#62766A", min_length=4, max_length=16)
+    schedule_mode: str = Field(default="days", max_length=16)
+    scheduled_weekdays: str = Field(default="1,2,3,4,5,6,7", max_length=32)
+    weekly_target: int = Field(default=3, ge=1, le=7)
+    reminder_times: str = ""
     sort_order: int
     is_archived: bool = False
     created_at: datetime
