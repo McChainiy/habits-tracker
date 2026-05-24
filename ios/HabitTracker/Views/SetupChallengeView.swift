@@ -495,6 +495,7 @@ struct SetupChallengeView: View {
         guard let year = components.year, let month = components.month else { return }
         var removedHabitIDs: [UUID] = []
         var notificationPlans: [HabitNotificationScheduler.Plan] = []
+        let isNewChallenge = challenge == nil
 
         let finalDuration = min(max(durationWeeks, 1), 100)
         let finalTarget = min(max(targetWeeks, 1), finalDuration)
@@ -566,6 +567,9 @@ struct SetupChallengeView: View {
             for plan in notificationPlans {
                 await HabitNotificationScheduler.shared.scheduleNotifications(for: plan)
             }
+        }
+        if isNewChallenge {
+            AppHaptics.itemAdded()
         }
         onCreate?()
         dismiss()

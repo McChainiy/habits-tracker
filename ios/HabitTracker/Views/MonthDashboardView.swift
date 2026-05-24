@@ -17,6 +17,7 @@ struct WeeklyDashboardView: View {
     @State private var highlightedCreateAction: CreateAction?
     @State private var selectedFilter: ChallengeFilter = .all
     @State private var highlightedChallengeID: UUID?
+    @State private var challengePressFeedbackTask: Task<Void, Never>?
 
     private let calendar = Calendar.current
     private let weekdays = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"]
@@ -91,6 +92,9 @@ struct WeeklyDashboardView: View {
                 .padding(24)
         }
         .navigationBarTitleDisplayMode(.inline)
+        .onDisappear {
+            stopChallengePressFeedback()
+        }
         .sheet(item: $sheet, onDismiss: {
             highlightedChallengeID = nil
             closeCreateMenu()
@@ -371,15 +375,45 @@ struct WeeklyDashboardView: View {
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .contentShape(Rectangle())
             .onTapGesture {
+                AppHaptics.habitSelected()
                 sheet = .editHabit(row.habit)
             }
-            .onLongPressGesture(minimumDuration: 0.45) {
+            .onLongPressGesture(minimumDuration: 0.45, maximumDistance: 10, pressing: { isPressing in
+                updateChallengePressFeedback(isPressing, for: row)
+            }) {
                 guard let challenge = row.challenge else { return }
+                stopChallengePressFeedback()
+                AppHaptics.challengeSelected()
                 withAnimation(.easeInOut(duration: 0.16)) {
                     highlightedChallengeID = challenge.id
                 }
                 sheet = .editChallenge(challenge)
             }
+    }
+
+    private func updateChallengePressFeedback(_ isPressing: Bool, for row: WeeklyHabitRow) {
+        guard row.challenge != nil else { return }
+        if isPressing {
+            startChallengePressFeedback()
+        } else {
+            stopChallengePressFeedback()
+        }
+    }
+
+    private func startChallengePressFeedback() {
+        stopChallengePressFeedback()
+        challengePressFeedbackTask = Task { @MainActor in
+            for intensity in [0.12, 0.24, 0.4] {
+                guard !Task.isCancelled else { return }
+                AppHaptics.challengePressProgress(intensity: intensity)
+                try? await Task.sleep(nanoseconds: 120_000_000)
+            }
+        }
+    }
+
+    private func stopChallengePressFeedback() {
+        challengePressFeedbackTask?.cancel()
+        challengePressFeedbackTask = nil
     }
 
     private func colorHex(for row: WeeklyHabitRow) -> String {
@@ -458,7 +492,7 @@ struct WeeklyDashboardView: View {
     private func cycleStatus(for habit: Habit, on date: Date) {
         let current = entry(for: habit, on: date)?.status
         if current == .done {
-            setStatus(.skipped, for: habit, on: date)
+            clearStatus(for: habit, on: date)
         } else {
             setStatus(.done, for: habit, on: date)
         }
@@ -466,8 +500,10 @@ struct WeeklyDashboardView: View {
 
     private func setStatus(_ status: HabitEntryStatus, for habit: Habit, on date: Date) {
         let normalizedDate = calendar.startOfDay(for: date)
+        let existingEntry = entry(for: habit, on: normalizedDate)
+        let shouldPlayCompletionHaptic = status == .done && existingEntry?.status != .done
 
-        if let existing = entry(for: habit, on: normalizedDate) {
+        if let existing = existingEntry {
             existing.status = status
         } else {
             let entry = HabitEntry(
@@ -480,6 +516,17 @@ struct WeeklyDashboardView: View {
             modelContext.insert(entry)
         }
 
+        try? modelContext.save()
+        if shouldPlayCompletionHaptic {
+            AppHaptics.habitCompleted()
+        }
+    }
+
+    private func clearStatus(for habit: Habit, on date: Date) {
+        let normalizedDate = calendar.startOfDay(for: date)
+        guard let existing = entry(for: habit, on: normalizedDate) else { return }
+        existing.markDeleted()
+        habit.touch()
         try? modelContext.save()
     }
 
@@ -598,7 +645,7 @@ private struct HabitWeekCell: View {
             if isHighlighted {
                 return color.opacity(0.13)
             }
-            return isToday ? AppPalette.soft : AppPalette.surface.opacity(0.42)
+            return AppPalette.surface.opacity(0.42)
         }
     }
 
@@ -980,6 +1027,8 @@ private struct HabitFormView: View {
         let challenge = selectedChallenge
         let notificationPlan: HabitNotificationScheduler.Plan
 
+        let isNewHabit = habit == nil
+
         if let habit {
             let oldChallenge = habit.challenge
             let didChangeChallenge = oldChallenge?.id != challenge?.id
@@ -1024,6 +1073,9 @@ private struct HabitFormView: View {
         try? modelContext.save()
         Task {
             await HabitNotificationScheduler.shared.scheduleNotifications(for: notificationPlan)
+        }
+        if isNewHabit {
+            AppHaptics.itemAdded()
         }
         dismiss()
     }

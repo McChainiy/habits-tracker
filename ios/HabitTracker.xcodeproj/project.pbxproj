@@ -10,6 +10,7 @@
 		24BAD097D640501F3D0E4A68 /* HabitTrackerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6301FCAA76F348B44F8BE9C7 /* HabitTrackerApp.swift */; };
 		29C252A6BADEC6941AEBB47D /* SetupChallengeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E328018C5EF4906B0E0CF18 /* SetupChallengeView.swift */; };
 		4D3B2A2D0123456789ABCDEF /* SyncClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D3B2A2C0123456789ABCDEF /* SyncClient.swift */; };
+		5B4C3D2E1F0A9876543210AB /* AppHaptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B4C3D2E1F0A9876543210AA /* AppHaptics.swift */; };
 		7A13B2C4D5E64789A0B1C2D3 /* HabitNotificationScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A13B2C3D5E64789A0B1C2D3 /* HabitNotificationScheduler.swift */; };
 		A48D2F736E48D6E98CD5CAC1 /* MonthDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07E83397BF98A18AA2C99BDF /* MonthDashboardView.swift */; };
 		A4D91DA59E849F1972466D65 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB27864D94CF825ABD16974F /* RootView.swift */; };
@@ -21,6 +22,7 @@
 		07E83397BF98A18AA2C99BDF /* MonthDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonthDashboardView.swift; sourceTree = "<group>"; };
 		4696D8019AD500F22F901E6D /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		4D3B2A2C0123456789ABCDEF /* SyncClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncClient.swift; sourceTree = "<group>"; };
+		5B4C3D2E1F0A9876543210AA /* AppHaptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppHaptics.swift; sourceTree = "<group>"; };
 		5E328018C5EF4906B0E0CF18 /* SetupChallengeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupChallengeView.swift; sourceTree = "<group>"; };
 		6301FCAA76F348B44F8BE9C7 /* HabitTrackerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HabitTrackerApp.swift; sourceTree = "<group>"; };
 		7A13B2C3D5E64789A0B1C2D3 /* HabitNotificationScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HabitNotificationScheduler.swift; sourceTree = "<group>"; };
@@ -67,6 +69,7 @@
 		C2137AD16F77B4196C18B4BD /* Domain */ = {
 			isa = PBXGroup;
 			children = (
+				5B4C3D2E1F0A9876543210AA /* AppHaptics.swift */,
 				4696D8019AD500F22F901E6D /* Models.swift */,
 				7A13B2C3D5E64789A0B1C2D3 /* HabitNotificationScheduler.swift */,
 				4D3B2A2C0123456789ABCDEF /* SyncClient.swift */,
@@ -149,6 +152,7 @@
 				ADA7686774E746F5DC47573F /* DesignTokens.swift in Sources */,
 				24BAD097D640501F3D0E4A68 /* HabitTrackerApp.swift in Sources */,
 				D8876B6997A1BB7049C1F6F5 /* Models.swift in Sources */,
+				5B4C3D2E1F0A9876543210AB /* AppHaptics.swift in Sources */,
 				7A13B2C4D5E64789A0B1C2D3 /* HabitNotificationScheduler.swift in Sources */,
 				A48D2F736E48D6E98CD5CAC1 /* MonthDashboardView.swift in Sources */,
 				A4D91DA59E849F1972466D65 /* RootView.swift in Sources */,
