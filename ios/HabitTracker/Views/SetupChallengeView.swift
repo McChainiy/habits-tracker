@@ -493,6 +493,8 @@ struct SetupChallengeView: View {
         let startDate = calendar.startOfDay(for: selectedStartDate)
         let components = calendar.dateComponents([.year, .month], from: startDate)
         guard let year = components.year, let month = components.month else { return }
+        var removedHabitIDs: [UUID] = []
+        var notificationPlans: [HabitNotificationScheduler.Plan] = []
 
         let finalDuration = min(max(durationWeeks, 1), 100)
         let finalTarget = min(max(targetWeeks, 1), finalDuration)
@@ -512,18 +514,23 @@ struct SetupChallengeView: View {
             challenge.status = .active
 
             let keptIDs = Set(draftHabits.compactMap { $0.sourceHabit?.id })
-            let removedHabits = challenge.habits.filter { !keptIDs.contains($0.id) }
+            let removedHabits = challenge.habits.filter {
+                !keptIDs.contains($0.id) && $0.deletedAt == nil
+            }
+            removedHabitIDs = removedHabits.map(\.id)
             for habit in removedHabits {
-                modelContext.delete(habit)
+                habit.markDeleted()
             }
 
             for (index, draft) in draftHabits.enumerated() {
                 if let habit = draft.sourceHabit {
                     update(habit, with: draft, sortOrder: index, challenge: challenge)
+                    notificationPlans.append(HabitNotificationScheduler.plan(for: habit))
                 } else {
                     let habit = makeHabit(from: draft, sortOrder: index, challenge: challenge)
                     challenge.habits.append(habit)
                     modelContext.insert(habit)
+                    notificationPlans.append(HabitNotificationScheduler.plan(for: habit))
                 }
             }
 
@@ -547,12 +554,19 @@ struct SetupChallengeView: View {
             for (index, draft) in draftHabits.enumerated() {
                 let habit = makeHabit(from: draft, sortOrder: index, challenge: challenge)
                 challenge.habits.append(habit)
+                notificationPlans.append(HabitNotificationScheduler.plan(for: habit))
             }
 
             modelContext.insert(challenge)
         }
 
         try? modelContext.save()
+        Task {
+            await HabitNotificationScheduler.shared.removeNotifications(forHabitIDs: removedHabitIDs)
+            for plan in notificationPlans {
+                await HabitNotificationScheduler.shared.scheduleNotifications(for: plan)
+            }
+        }
         onCreate?()
         dismiss()
     }
@@ -590,11 +604,14 @@ struct SetupChallengeView: View {
 
     private func deleteChallenge() {
         guard let challenge else { return }
-        for habit in Array(challenge.habits) {
-            modelContext.delete(habit)
-        }
-        modelContext.delete(challenge)
+        let habitIDs = challenge.habits
+            .filter { $0.deletedAt == nil }
+            .map(\.id)
+        challenge.markDeleted()
         try? modelContext.save()
+        Task {
+            await HabitNotificationScheduler.shared.removeNotifications(forHabitIDs: habitIDs)
+        }
         dismiss()
     }
 

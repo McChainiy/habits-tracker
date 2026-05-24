@@ -233,9 +233,13 @@ struct WeeklyDashboardView: View {
             Spacer()
 
             Menu {
-                Button("Все челленджи") {
+                Button {
                     selectedFilter = .all
+                } label: {
+                    Label("Все челленджи", systemImage: "square.grid.2x2")
                 }
+
+                Divider()
 
                 ForEach(visibleChallenges, id: \.id) { challenge in
                     Button(challenge.title) {
@@ -243,8 +247,12 @@ struct WeeklyDashboardView: View {
                     }
                 }
 
-                Button("Без челленджа") {
+                Divider()
+
+                Button {
                     selectedFilter = .noChallenge
+                } label: {
+                    Label("Без челленджа", systemImage: "tray")
                 }
             } label: {
                 HStack(spacing: 6) {
@@ -970,6 +978,7 @@ private struct HabitFormView: View {
 
     private func saveHabit() {
         let challenge = selectedChallenge
+        let notificationPlan: HabitNotificationScheduler.Plan
 
         if let habit {
             let oldChallenge = habit.challenge
@@ -989,6 +998,7 @@ private struct HabitFormView: View {
             habit.touch()
             oldChallenge?.touch()
             challenge?.touch()
+            notificationPlan = HabitNotificationScheduler.plan(for: habit)
         } else {
             let habit = Habit(
                 userId: challenge?.user?.id,
@@ -1008,9 +1018,13 @@ private struct HabitFormView: View {
                 challenge.touch()
             }
             modelContext.insert(habit)
+            notificationPlan = HabitNotificationScheduler.plan(for: habit)
         }
 
         try? modelContext.save()
+        Task {
+            await HabitNotificationScheduler.shared.scheduleNotifications(for: notificationPlan)
+        }
         dismiss()
     }
 
@@ -1024,9 +1038,13 @@ private struct HabitFormView: View {
     private func deleteHabit() {
         guard let habit else { return }
         let challenge = habit.challenge
-        modelContext.delete(habit)
+        let habitID = habit.id
+        habit.markDeleted()
         challenge?.touch()
         try? modelContext.save()
+        Task {
+            await HabitNotificationScheduler.shared.removeNotifications(forHabitID: habitID)
+        }
         dismiss()
     }
 }

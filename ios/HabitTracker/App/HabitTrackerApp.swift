@@ -3,6 +3,10 @@ import SwiftUI
 
 @main
 struct HabitTrackerApp: App {
+    init() {
+        HabitNotificationScheduler.shared.configure()
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()

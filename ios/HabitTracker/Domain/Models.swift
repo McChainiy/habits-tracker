@@ -34,7 +34,11 @@ enum HabitColor: String, CaseIterable, Identifiable {
 }
 
 enum AppConfig {
+    #if targetEnvironment(simulator)
     static let apiBaseURL = URL(string: "http://127.0.0.1:8001")!
+    #else
+    static let apiBaseURL = URL(string: "http://MacBook-Air-Danil.local:8001")!
+    #endif
 }
 
 @Model
@@ -192,6 +196,14 @@ final class Challenge {
     func touch() {
         updatedAt = Date()
     }
+
+    func markDeleted(at date: Date = Date()) {
+        deletedAt = date
+        updatedAt = date
+        for habit in habits {
+            habit.markDeleted(at: date)
+        }
+    }
 }
 
 @Model
@@ -257,6 +269,14 @@ final class Habit {
         updatedAt = Date()
     }
 
+    func markDeleted(at date: Date = Date()) {
+        deletedAt = date
+        updatedAt = date
+        for entry in entries {
+            entry.markDeleted(at: date)
+        }
+    }
+
     var scheduleMode: HabitScheduleMode {
         get { HabitScheduleMode(rawValue: scheduleModeRawValue) ?? .days }
         set {
@@ -298,6 +318,21 @@ final class Habit {
             .sorted()
             .map(String.init)
             .joined(separator: ",")
+    }
+
+    static func decodeWeekdays(_ value: String) -> Set<Int> {
+        let weekdays = value
+            .split(separator: ",")
+            .compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
+            .filter { (1...7).contains($0) }
+        return Set(weekdays)
+    }
+
+    static func decodeReminderTimes(_ value: String) -> [String] {
+        value
+            .split(separator: ",")
+            .map { String($0.trimmingCharacters(in: .whitespaces)) }
+            .filter { !$0.isEmpty }
     }
 }
 
@@ -343,6 +378,11 @@ final class HabitEntry {
 
     func touch() {
         updatedAt = Date()
+    }
+
+    func markDeleted(at date: Date = Date()) {
+        deletedAt = date
+        updatedAt = date
     }
 }
 

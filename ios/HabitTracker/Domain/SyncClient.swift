@@ -20,25 +20,27 @@ struct SyncClient {
         user: AppUser,
         state: SyncState,
         challenges: [Challenge],
+        habits: [Habit],
         modelContext: ModelContext
     ) async throws {
-        normalizeOwnership(user: user, challenges: challenges)
+        normalizeOwnership(user: user, challenges: challenges, habits: habits)
         try await ensureRemoteUser(user)
 
         let pushPayload = makePushPayload(
             user: user,
             challenges: challenges,
+            habits: habits,
             changedAfter: state.lastPushedAt
         )
 
         if pushPayload.hasChanges {
             let pushedChanges = try await pushChanges(pushPayload, userID: user.id)
-            apply(changes: pushedChanges, user: user, challenges: challenges, modelContext: modelContext)
+            apply(changes: pushedChanges, user: user, challenges: challenges, habits: habits, modelContext: modelContext)
             state.markSuccess(pushedAt: pushedChanges.serverTimestamp)
         }
 
         let pulledChanges = try await pullChanges(since: state.lastPulledAt, userID: user.id)
-        apply(changes: pulledChanges, user: user, challenges: challenges, modelContext: modelContext)
+        apply(changes: pulledChanges, user: user, challenges: challenges, habits: habits, modelContext: modelContext)
         state.markSuccess(pulledAt: pulledChanges.serverTimestamp)
     }
 
@@ -105,18 +107,18 @@ struct SyncClient {
         return try SyncCoding.decoder.decode(type, from: data)
     }
 
-    private func normalizeOwnership(user: AppUser, challenges: [Challenge]) {
+    private func normalizeOwnership(user: AppUser, challenges: [Challenge], habits: [Habit]) {
         for challenge in challenges where challenge.user == nil {
             challenge.user = user
             challenge.touch()
         }
 
-        for habit in challenges.flatMap(\.habits) where habit.userId == nil {
+        for habit in habits where habit.userId == nil {
             habit.userId = user.id
             habit.touch()
         }
 
-        for entry in challenges.flatMap(\.habits).flatMap(\.entries) where entry.userId == nil {
+        for entry in habits.flatMap(\.entries) where entry.userId == nil {
             entry.userId = user.id
             entry.touch()
         }
@@ -125,22 +127,26 @@ struct SyncClient {
     private func makePushPayload(
         user: AppUser,
         challenges: [Challenge],
+        habits: [Habit],
         changedAfter: Date?
     ) -> SyncPushPayload {
         let ownedChallenges = challenges.filter { $0.user?.id == user.id }
-        let ownedHabits = ownedChallenges.flatMap(\.habits).filter { $0.userId == user.id }
+        let ownedHabits = habits.filter { $0.userId == user.id }
         let ownedEntries = ownedHabits.flatMap(\.entries).filter { $0.userId == user.id }
+        let changedEntries = ownedEntries.filter { wasChanged($0.updatedAt, after: changedAfter) }
+        let changedHabitIDsFromEntries = Set(changedEntries.compactMap { $0.habit?.id })
+        let changedHabits = ownedHabits.filter {
+            $0.challenge == nil || wasChanged($0.updatedAt, after: changedAfter) || changedHabitIDsFromEntries.contains($0.id)
+        }
+        let changedChallengeIDsFromHabits = Set(changedHabits.compactMap { $0.challenge?.id })
+        let changedChallenges = ownedChallenges.filter {
+            wasChanged($0.updatedAt, after: changedAfter) || changedChallengeIDsFromHabits.contains($0.id)
+        }
 
         return SyncPushPayload(
-            challenges: ownedChallenges
-                .filter { wasChanged($0.updatedAt, after: changedAfter) }
-                .map(SyncChallengePayload.init),
-            habits: ownedHabits
-                .filter { wasChanged($0.updatedAt, after: changedAfter) }
-                .compactMap(SyncHabitPayload.init),
-            habitEntries: ownedEntries
-                .filter { wasChanged($0.updatedAt, after: changedAfter) }
-                .compactMap(SyncHabitEntryPayload.init)
+            challenges: changedChallenges.map(SyncChallengePayload.init),
+            habits: changedHabits.map(SyncHabitPayload.init),
+            habitEntries: changedEntries.compactMap(SyncHabitEntryPayload.init)
         )
     }
 
@@ -153,29 +159,42 @@ struct SyncClient {
         changes: SyncChangesPayload,
         user: AppUser,
         challenges: [Challenge],
+        habits: [Habit],
         modelContext: ModelContext
     ) {
         var challengeByID = Dictionary(uniqueKeysWithValues: challenges.map { ($0.id, $0) })
-        var habitByID = Dictionary(uniqueKeysWithValues: challenges.flatMap(\.habits).map { ($0.id, $0) })
+        var habitByID = Dictionary(uniqueKeysWithValues: habits.map { ($0.id, $0) })
         var entryByID = Dictionary(
-            uniqueKeysWithValues: challenges.flatMap(\.habits).flatMap(\.entries).map { ($0.id, $0) }
+            uniqueKeysWithValues: habits.flatMap(\.entries).map { ($0.id, $0) }
         )
 
         for payload in changes.challenges {
             let challenge = challengeByID[payload.id] ?? Challenge(
                 id: payload.id,
+                customTitle: payload.customTitle,
+                colorHex: payload.colorHex,
                 month: payload.month,
                 year: payload.year,
                 startDate: SyncCoding.date(from: payload.startDate),
                 endDate: SyncCoding.date(from: payload.endDate),
+                durationWeeks: payload.durationWeeks,
+                targetWeeks: payload.targetWeeks,
+                isTimeless: payload.isTimeless,
+                rewardText: payload.rewardText,
                 status: ChallengeStatus(rawValue: payload.status) ?? .draft,
                 user: user
             )
 
+            challenge.customTitle = payload.customTitle
+            challenge.colorHex = payload.colorHex
             challenge.month = payload.month
             challenge.year = payload.year
             challenge.startDate = SyncCoding.date(from: payload.startDate)
             challenge.endDate = SyncCoding.date(from: payload.endDate)
+            challenge.durationWeeks = payload.durationWeeks
+            challenge.targetWeeks = payload.targetWeeks
+            challenge.isTimeless = payload.isTimeless
+            challenge.rewardText = payload.rewardText
             challenge.statusRawValue = payload.status
             challenge.createdAt = payload.createdAt
             challenge.updatedAt = payload.updatedAt
@@ -189,7 +208,7 @@ struct SyncClient {
         }
 
         for payload in changes.habits {
-            guard let challenge = challengeByID[payload.challengeID] else { continue }
+            let challenge = payload.challengeID.flatMap { challengeByID[$0] }
 
             let habit = habitByID[payload.id] ?? Habit(
                 id: payload.id,
@@ -197,6 +216,10 @@ struct SyncClient {
                 title: payload.title,
                 penaltyText: payload.penaltyText,
                 colorHex: payload.colorHex,
+                scheduleMode: HabitScheduleMode(rawValue: payload.scheduleMode) ?? .days,
+                scheduledWeekdays: Habit.decodeWeekdays(payload.scheduledWeekdays),
+                weeklyTarget: payload.weeklyTarget,
+                reminderTimes: Habit.decodeReminderTimes(payload.reminderTimes),
                 sortOrder: payload.sortOrder,
                 challenge: challenge
             )
@@ -206,6 +229,10 @@ struct SyncClient {
             habit.note = payload.note
             habit.penaltyText = payload.penaltyText
             habit.colorHex = payload.colorHex
+            habit.scheduleModeRawValue = payload.scheduleMode
+            habit.scheduledWeekdaysRawValue = payload.scheduledWeekdays
+            habit.weeklyTarget = payload.weeklyTarget
+            habit.reminderTimesRawValue = payload.reminderTimes
             habit.sortOrder = payload.sortOrder
             habit.isArchived = payload.isArchived
             habit.createdAt = payload.createdAt
@@ -214,7 +241,7 @@ struct SyncClient {
             habit.challenge = challenge
 
             if habitByID[payload.id] == nil {
-                challenge.habits.append(habit)
+                challenge?.habits.append(habit)
                 modelContext.insert(habit)
                 habitByID[payload.id] = habit
             }
@@ -342,10 +369,16 @@ private struct SyncChangesPayload: Decodable {
 
 private struct SyncChallengePayload: Codable {
     let id: UUID
+    let customTitle: String
+    let colorHex: String
     let month: Int
     let year: Int
     let startDate: String
     let endDate: String
+    let durationWeeks: Int
+    let targetWeeks: Int
+    let isTimeless: Bool
+    let rewardText: String
     let status: String
     let createdAt: Date
     let updatedAt: Date
@@ -353,10 +386,16 @@ private struct SyncChallengePayload: Codable {
 
     init(_ challenge: Challenge) {
         id = challenge.id
+        customTitle = challenge.customTitle
+        colorHex = challenge.colorHex
         month = challenge.month
         year = challenge.year
         startDate = SyncCoding.dateString(from: challenge.startDate)
         endDate = SyncCoding.dateString(from: challenge.endDate)
+        durationWeeks = challenge.durationWeeks
+        targetWeeks = challenge.targetWeeks
+        isTimeless = challenge.isTimeless
+        rewardText = challenge.rewardText
         status = challenge.statusRawValue
         createdAt = challenge.createdAt
         updatedAt = challenge.updatedAt
@@ -366,25 +405,32 @@ private struct SyncChallengePayload: Codable {
 
 private struct SyncHabitPayload: Codable {
     let id: UUID
-    let challengeID: UUID
+    let challengeID: UUID?
     let title: String
     let note: String
     let penaltyText: String
     let colorHex: String
+    let scheduleMode: String
+    let scheduledWeekdays: String
+    let weeklyTarget: Int
+    let reminderTimes: String
     let sortOrder: Int
     let isArchived: Bool
     let createdAt: Date
     let updatedAt: Date
     let deletedAt: Date?
 
-    init?(_ habit: Habit) {
-        guard let challengeID = habit.challenge?.id else { return nil }
+    init(_ habit: Habit) {
         id = habit.id
-        self.challengeID = challengeID
+        challengeID = habit.challenge?.id
         title = habit.title
         note = habit.note
         penaltyText = habit.penaltyText
         colorHex = habit.colorHex
+        scheduleMode = habit.scheduleModeRawValue
+        scheduledWeekdays = habit.scheduledWeekdaysRawValue
+        weeklyTarget = habit.weeklyTarget
+        reminderTimes = habit.reminderTimesRawValue
         sortOrder = habit.sortOrder
         isArchived = habit.isArchived
         createdAt = habit.createdAt

@@ -13,6 +13,9 @@ struct RootView: View {
     @Query(sort: \Challenge.createdAt, order: .reverse)
     private var challenges: [Challenge]
 
+    @Query(sort: \Habit.createdAt)
+    private var habits: [Habit]
+
     private var activeChallenges: [Challenge] {
         let visibleChallenges = challenges.filter { $0.deletedAt == nil }
         let active = visibleChallenges.filter { $0.status == .active }
@@ -33,6 +36,7 @@ struct RootView: View {
             ensureSyncState()
         }
         .task {
+            await scheduleExistingHabitNotifications()
             await runSyncLoop()
         }
     }
@@ -72,12 +76,24 @@ struct RootView: View {
                 user: user,
                 state: state,
                 challenges: challenges,
+                habits: habits,
                 modelContext: modelContext
             )
             try? modelContext.save()
         } catch {
             state.markFailure(error)
             try? modelContext.save()
+        }
+    }
+
+    @MainActor
+    private func scheduleExistingHabitNotifications() async {
+        let plans = habits
+            .filter { !$0.isArchived && $0.deletedAt == nil }
+            .map(HabitNotificationScheduler.plan(for:))
+
+        for plan in plans {
+            await HabitNotificationScheduler.shared.scheduleNotifications(for: plan)
         }
     }
 }
