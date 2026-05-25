@@ -54,6 +54,7 @@ struct SetupChallengeView: View {
 
     private let challenge: Challenge?
     var onCreate: (() -> Void)?
+    var onFinish: (() -> Void)?
 
     @State private var title: String
     @State private var selectedStartDate: Date
@@ -98,9 +99,14 @@ struct SetupChallengeView: View {
         }
     }
 
-    init(challenge: Challenge? = nil, onCreate: (() -> Void)? = nil) {
+    init(
+        challenge: Challenge? = nil,
+        onCreate: (() -> Void)? = nil,
+        onFinish: (() -> Void)? = nil
+    ) {
         self.challenge = challenge
         self.onCreate = onCreate
+        self.onFinish = onFinish
 
         _title = State(initialValue: Self.initialTitle(for: challenge))
         _selectedStartDate = State(initialValue: challenge?.startDate ?? Date())
@@ -223,7 +229,7 @@ struct SetupChallengeView: View {
                 Button {
                     draftHabits.append(
                         DraftHabit(
-                            scheduledWeekdays: [1, 3, 5]
+                            scheduledWeekdays: []
                         )
                     )
                 } label: {
@@ -253,7 +259,7 @@ struct SetupChallengeView: View {
                         .lineLimit(1...3)
                 }
 
-                scheduleModePicker(selection: habit.scheduleMode)
+                scheduleModePicker(selection: habit.scheduleMode, weekdays: habit.scheduledWeekdays)
 
                 Button {
                     deleteHabit(habit.wrappedValue)
@@ -383,11 +389,18 @@ struct SetupChallengeView: View {
         return "Челлендж засчитывается, если набрано \(clampedTargetWeeks) \(successWeekWord(clampedTargetWeeks)) из \(durationWeeks) \(weekWord(durationWeeks))."
     }
 
-    private func scheduleModePicker(selection: Binding<HabitScheduleMode>) -> some View {
+    private func scheduleModePicker(
+        selection: Binding<HabitScheduleMode>,
+        weekdays: Binding<Set<Int>>
+    ) -> some View {
         HStack(spacing: 3) {
             ForEach(HabitScheduleMode.allCases) { mode in
                 Button {
+                    guard selection.wrappedValue != mode else { return }
                     selection.wrappedValue = mode
+                    if mode == .days {
+                        weekdays.wrappedValue = []
+                    }
                 } label: {
                     Text(mode == .days ? "дни" : "раз")
                         .font(.system(size: 11, weight: .bold))
@@ -572,7 +585,7 @@ struct SetupChallengeView: View {
             AppHaptics.itemAdded()
         }
         onCreate?()
-        dismiss()
+        finish()
     }
 
     private func makeHabit(from draft: DraftHabit, sortOrder: Int, challenge: Challenge) -> Habit {
@@ -616,7 +629,15 @@ struct SetupChallengeView: View {
         Task {
             await HabitNotificationScheduler.shared.removeNotifications(forHabitIDs: habitIDs)
         }
-        dismiss()
+        finish()
+    }
+
+    private func finish() {
+        if let onFinish {
+            onFinish()
+        } else {
+            dismiss()
+        }
     }
 
     private func deleteHabit(_ habit: DraftHabit) {
@@ -659,12 +680,12 @@ struct SetupChallengeView: View {
                 DraftHabit(
                     title: "Гулять 40 минут",
                     note: "Свежий воздух без телефона в руках.",
-                    scheduledWeekdays: [1, 2, 5]
+                    scheduledWeekdays: []
                 ),
                 DraftHabit(
                     title: "Спорт 30 минут",
                     note: "Тренировка дома или зал.",
-                    scheduledWeekdays: [3, 4, 6]
+                    scheduledWeekdays: []
                 )
             ]
         }

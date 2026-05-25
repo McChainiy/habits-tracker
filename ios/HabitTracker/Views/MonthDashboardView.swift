@@ -31,11 +31,6 @@ struct WeeklyDashboardView: View {
         }
     }
 
-    private var selectedWeekEnd: Date {
-        calendar.date(byAdding: .day, value: 6, to: selectedWeekStart)
-            .map(calendar.startOfDay(for:)) ?? selectedWeekStart
-    }
-
     private var activeChallenges: [Challenge] {
         challenges
             .filter { $0.deletedAt == nil }
@@ -43,45 +38,11 @@ struct WeeklyDashboardView: View {
     }
 
     private var visibleChallenges: [Challenge] {
-        activeChallenges
-            .filter {
-                wasCreatedBySelectedWeek($0.createdAt) &&
-                isActiveDuringSelectedWeek($0)
-            }
-    }
-
-    private var orphanHabits: [Habit] {
-        habits
-            .filter { habit in
-                habit.challenge == nil &&
-                !habit.isArchived &&
-                habit.deletedAt == nil &&
-                wasCreatedBySelectedWeek(habit.createdAt)
-            }
-            .sorted { $0.sortOrder < $1.sortOrder }
+        visibleChallenges(forWeekStart: selectedWeekStart)
     }
 
     private var rows: [WeeklyHabitRow] {
-        switch selectedFilter {
-        case .all:
-            return challengeRows + orphanRows
-        case .challenge(let id):
-            return visibleChallenges
-                .filter { $0.id == id }
-                .flatMap(rows(for:))
-        case .noChallenge:
-            return orphanRows
-        }
-    }
-
-    private var challengeRows: [WeeklyHabitRow] {
-        visibleChallenges.flatMap(rows(for:))
-    }
-
-    private var orphanRows: [WeeklyHabitRow] {
-        orphanHabits.map {
-            WeeklyHabitRow(challenge: nil, habit: $0)
-        }
+        rows(forWeekStart: selectedWeekStart, applying: selectedFilter)
     }
 
     var body: some View {
@@ -124,6 +85,10 @@ struct WeeklyDashboardView: View {
                     HabitFormView(challenges: activeChallenges)
                 case .newChallenge:
                     SetupChallengeView()
+                case .habitDetail(let habit):
+                    HabitDetailView(habit: habit, challenges: activeChallenges)
+                case .challengeDetail(let challenge):
+                    ChallengeDetailView(challenge: challenge)
                 case .editHabit(let habit):
                     HabitFormView(challenges: activeChallenges, habit: habit)
                 case .editChallenge(let challenge):
@@ -371,6 +336,7 @@ struct WeeklyDashboardView: View {
             selectedWeekStart = currentWeekStart
             visibleMonthDate = calendar.startOfMonth(for: Date())
             isMonthCalendarPresented = false
+            sanitizeSelectedFilter(forWeekStart: currentWeekStart)
         }
     }
 
@@ -502,6 +468,7 @@ struct WeeklyDashboardView: View {
             selectedWeekStart = weekStart
             visibleMonthDate = calendar.startOfMonth(for: date)
             isMonthCalendarPresented = false
+            sanitizeSelectedFilter(forWeekStart: weekStart)
         }
     }
 
@@ -513,7 +480,10 @@ struct WeeklyDashboardView: View {
     }
 
     private func monthEntrySummary(on date: Date) -> MonthEntrySummary {
-        let statuses = rows.compactMap { entry(for: $0.habit, on: date)?.status }
+        let weekStart = calendar.startOfWeek(for: date)
+        let statuses = rows(forWeekStart: weekStart, applying: selectedFilter).compactMap {
+            entry(for: $0.habit, on: date)?.status
+        }
         if statuses.contains(.failed) {
             return .failed
         }
@@ -651,7 +621,7 @@ struct WeeklyDashboardView: View {
             .contentShape(Rectangle())
             .onTapGesture {
                 AppHaptics.habitSelected()
-                sheet = .editHabit(row.habit)
+                sheet = .habitDetail(row.habit)
             }
             .onLongPressGesture(minimumDuration: 0.45, maximumDistance: 10, pressing: { isPressing in
                 updateChallengePressFeedback(isPressing, for: row)
@@ -662,7 +632,7 @@ struct WeeklyDashboardView: View {
                 withAnimation(.easeInOut(duration: 0.16)) {
                     highlightedChallengeID = challenge.id
                 }
-                sheet = .editChallenge(challenge)
+                sheet = .challengeDetail(challenge)
             }
     }
 
@@ -710,30 +680,91 @@ struct WeeklyDashboardView: View {
         }
     }
 
-    private func rows(for challenge: Challenge) -> [WeeklyHabitRow] {
+    private func rows(forWeekStart weekStart: Date, applying filter: ChallengeFilter) -> [WeeklyHabitRow] {
+        let weekEnd = weekEnd(for: weekStart)
+        let challenges = visibleChallenges(forWeekStart: weekStart)
+
+        switch filter {
+        case .all:
+            return (
+                rowsForChallenges(challenges, weekEnd: weekEnd) +
+                rowsForOrphanHabits(orphanHabits(forWeekEnd: weekEnd))
+            )
+        case .challenge(let id):
+            return rowsForChallenges(challenges.filter { $0.id == id }, weekEnd: weekEnd)
+        case .noChallenge:
+            return rowsForOrphanHabits(orphanHabits(forWeekEnd: weekEnd))
+        }
+    }
+
+    private func rowsForChallenges(_ challenges: [Challenge], weekEnd: Date) -> [WeeklyHabitRow] {
+        challenges.flatMap {
+            rows(for: $0, weekEnd: weekEnd)
+        }
+    }
+
+    private func rowsForOrphanHabits(_ habits: [Habit]) -> [WeeklyHabitRow] {
+        habits.map {
+            WeeklyHabitRow(challenge: nil, habit: $0)
+        }
+    }
+
+    private func rows(for challenge: Challenge, weekEnd: Date) -> [WeeklyHabitRow] {
         challenge.habits
             .filter {
                 !$0.isArchived &&
                 $0.deletedAt == nil &&
-                wasCreatedBySelectedWeek($0.createdAt)
+                wasCreated($0.createdAt, by: weekEnd)
             }
             .sorted { $0.sortOrder < $1.sortOrder }
             .map { WeeklyHabitRow(challenge: challenge, habit: $0) }
     }
 
-    private func wasCreatedBySelectedWeek(_ createdAt: Date) -> Bool {
-        calendar.startOfDay(for: createdAt) <= selectedWeekEnd
+    private func orphanHabits(forWeekEnd weekEnd: Date) -> [Habit] {
+        habits
+            .filter { habit in
+                habit.challenge == nil &&
+                !habit.isArchived &&
+                habit.deletedAt == nil &&
+                wasCreated(habit.createdAt, by: weekEnd)
+            }
+            .sorted { $0.sortOrder < $1.sortOrder }
     }
 
-    private func isActiveDuringSelectedWeek(_ challenge: Challenge) -> Bool {
+    private func visibleChallenges(forWeekStart weekStart: Date) -> [Challenge] {
+        let weekEnd = weekEnd(for: weekStart)
+        return activeChallenges
+            .filter {
+                wasCreated($0.createdAt, by: weekEnd) &&
+                isActive($0, duringWeekStart: weekStart, weekEnd: weekEnd)
+            }
+    }
+
+    private func weekEnd(for weekStart: Date) -> Date {
+        calendar.date(byAdding: .day, value: 6, to: weekStart)
+            .map(calendar.startOfDay(for:)) ?? weekStart
+    }
+
+    private func wasCreated(_ createdAt: Date, by weekEnd: Date) -> Bool {
+        calendar.startOfDay(for: createdAt) <= weekEnd
+    }
+
+    private func isActive(_ challenge: Challenge, duringWeekStart weekStart: Date, weekEnd: Date) -> Bool {
         let challengeStart = calendar.startOfDay(for: challenge.startDate)
         let challengeEnd = calendar.startOfDay(for: challenge.endDate)
 
         if challenge.isTimeless {
-            return challengeStart <= selectedWeekEnd
+            return challengeStart <= weekEnd
         }
 
-        return challengeStart <= selectedWeekEnd && challengeEnd >= selectedWeekStart
+        return challengeStart <= weekEnd && challengeEnd >= weekStart
+    }
+
+    private func sanitizeSelectedFilter(forWeekStart weekStart: Date) {
+        guard case .challenge(let id) = selectedFilter else { return }
+        if !visibleChallenges(forWeekStart: weekStart).contains(where: { $0.id == id }) {
+            selectedFilter = .all
+        }
     }
 
     private func state(for habit: Habit, on date: Date) -> HabitWeekCell.State {
@@ -890,6 +921,8 @@ private enum CreateAction {
 private enum DashboardSheet: Identifiable {
     case newHabit
     case newChallenge
+    case habitDetail(Habit)
+    case challengeDetail(Challenge)
     case editHabit(Habit)
     case editChallenge(Challenge)
 
@@ -897,9 +930,733 @@ private enum DashboardSheet: Identifiable {
         switch self {
         case .newHabit: return "newHabit"
         case .newChallenge: return "newChallenge"
+        case .habitDetail(let habit): return "habitDetail-\(habit.id)"
+        case .challengeDetail(let challenge): return "challengeDetail-\(challenge.id)"
         case .editHabit(let habit): return "editHabit-\(habit.id)"
         case .editChallenge(let challenge): return "editChallenge-\(challenge.id)"
         }
+    }
+}
+
+private struct HabitDetailView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let habit: Habit
+    let challenges: [Challenge]
+
+    private let calendar = Calendar.current
+    private let weekdays = [
+        (1, "ПН"),
+        (2, "ВТ"),
+        (3, "СР"),
+        (4, "ЧТ"),
+        (5, "ПТ"),
+        (6, "СБ"),
+        (7, "ВС")
+    ]
+
+    private var activeEntries: [HabitEntry] {
+        habit.entries.filter { $0.deletedAt == nil }
+    }
+
+    private var doneEntries: [HabitEntry] {
+        activeEntries.filter { $0.status == .done }
+    }
+
+    private var failedEntries: [HabitEntry] {
+        activeEntries.filter { $0.status == .failed }
+    }
+
+    private var skippedEntries: [HabitEntry] {
+        activeEntries.filter { $0.status == .skipped }
+    }
+
+    private var expectedCompletions: Int {
+        expectedCompletionCount(from: habit.createdAt, through: Date())
+    }
+
+    private var completionRate: Int {
+        guard expectedCompletions > 0 else { return doneEntries.isEmpty ? 0 : 100 }
+        let rate = Double(doneEntries.count) / Double(expectedCompletions)
+        return min(100, Int((rate * 100).rounded()))
+    }
+
+    private var recentDates: [Date] {
+        let today = calendar.startOfDay(for: Date())
+        return (0..<7).compactMap {
+            calendar.date(byAdding: .day, value: $0 - 6, to: today)
+        }
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                heroPanel
+                metricsGrid
+                schedulePanel
+                recentPanel
+
+                NavigationLink {
+                    HabitFormView(challenges: challenges, habit: habit) {
+                        dismiss()
+                    }
+                } label: {
+                    Label("Редактировать привычку", systemImage: "pencil")
+                }
+                .buttonStyle(PrimaryButtonStyle())
+            }
+            .padding(20)
+        }
+        .background(AppPalette.paper.ignoresSafeArea())
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button("Закрыть") {
+                    dismiss()
+                }
+            }
+        }
+    }
+
+    private var heroPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                Circle()
+                    .fill(Color(hex: habit.challenge?.colorHex ?? habit.colorHex))
+                    .frame(width: 14, height: 14)
+                    .padding(.top, 9)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(habit.title)
+                        .font(.system(size: 30, weight: .semibold))
+                        .foregroundStyle(AppPalette.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text(habit.challenge?.title ?? "Без челленджа")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(AppPalette.muted)
+                }
+            }
+
+            if !habit.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(habit.note)
+                    .font(.system(size: 15))
+                    .foregroundStyle(AppPalette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            DetailProgressBar(value: completionRate, color: Color(hex: habit.challenge?.colorHex ?? habit.colorHex))
+        }
+        .weeklyPanelStyle()
+    }
+
+    private var metricsGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+            DetailMetricTile(title: "Выполнено", value: "\(doneEntries.count)", subtitle: "всего отметок")
+            DetailMetricTile(title: "Прогресс", value: "\(completionRate)%", subtitle: "от плана")
+            DetailMetricTile(title: "Серия", value: streakText, subtitle: streakSubtitle)
+            DetailMetricTile(title: "Срывы", value: "\(failedEntries.count)", subtitle: "пропусков: \(skippedEntries.count)")
+        }
+    }
+
+    private var schedulePanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Расписание")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(AppPalette.muted)
+
+            DetailInfoRow(title: "План", value: scheduleText)
+
+            if habit.reminderTimes.isEmpty {
+                DetailInfoRow(title: "Напоминания", value: "Не установлены")
+            } else {
+                DetailInfoRow(title: "Напоминания", value: habit.reminderTimes.sorted().joined(separator: ", "))
+            }
+
+            DetailInfoRow(title: "Создана", value: formatted(habit.createdAt, pattern: "d MMMM yyyy"))
+        }
+        .weeklyPanelStyle()
+    }
+
+    private var recentPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Последние 7 дней")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(AppPalette.muted)
+
+            HStack(spacing: 6) {
+                ForEach(recentDates, id: \.self) { date in
+                    recentDay(date)
+                }
+            }
+        }
+        .weeklyPanelStyle()
+    }
+
+    private func recentDay(_ date: Date) -> some View {
+        let entry = entry(on: date)
+        let isDone = entry?.status == .done
+        let isFailed = entry?.status == .failed
+        let planned = isPlanned(on: date)
+        let color = Color(hex: habit.challenge?.colorHex ?? habit.colorHex)
+
+        return VStack(spacing: 5) {
+            Text(formatted(date, pattern: "EEEEE").uppercased())
+                .font(.system(size: 10, weight: .bold))
+            Text(formatted(date, pattern: "d"))
+                .font(.system(size: 11, weight: .semibold))
+            Circle()
+                .fill(isDone ? color : (isFailed ? AppPalette.warning : (planned ? color.opacity(0.25) : AppPalette.line.opacity(0.55))))
+                .frame(width: 7, height: 7)
+        }
+        .foregroundStyle(AppPalette.muted)
+        .frame(maxWidth: .infinity)
+        .frame(height: 52)
+        .background(AppPalette.paper)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private var scheduleText: String {
+        switch habit.scheduleMode {
+        case .days:
+            let selected = weekdays
+                .filter { habit.scheduledWeekdays.contains($0.0) }
+                .map(\.1)
+            return selected.isEmpty ? "Дни не выбраны" : selected.joined(separator: ", ")
+        case .count:
+            return "\(habit.weeklyTarget) \(timesWord(habit.weeklyTarget)) в неделю"
+        }
+    }
+
+    private var streakText: String {
+        switch habit.scheduleMode {
+        case .days:
+            return "\(currentPlannedDayStreak())"
+        case .count:
+            return "\(currentSuccessfulWeekStreak())"
+        }
+    }
+
+    private var streakSubtitle: String {
+        switch habit.scheduleMode {
+        case .days:
+            return "плановых дней подряд"
+        case .count:
+            return "успешных недель подряд"
+        }
+    }
+
+    private func expectedCompletionCount(from startDate: Date, through endDate: Date) -> Int {
+        let start = calendar.startOfDay(for: startDate)
+        let end = calendar.startOfDay(for: endDate)
+        guard start <= end else { return 0 }
+
+        switch habit.scheduleMode {
+        case .days:
+            return dates(from: start, through: end).filter {
+                habit.scheduledWeekdays.contains(calendar.mondayWeekdayIndex(for: $0))
+            }.count
+        case .count:
+            var total = 0
+            var weekStart = calendar.startOfWeek(for: start)
+            let lastWeekStart = calendar.startOfWeek(for: end)
+            while weekStart <= lastWeekStart {
+                let weekEnd = calendar.date(byAdding: .day, value: 6, to: weekStart) ?? weekStart
+                let cappedStart = max(weekStart, start)
+                let cappedEnd = min(weekEnd, end)
+                let eligibleDays = dates(from: cappedStart, through: cappedEnd).count
+                total += min(max(habit.weeklyTarget, 1), eligibleDays)
+                guard let nextWeek = calendar.date(byAdding: .day, value: 7, to: weekStart) else { break }
+                weekStart = nextWeek
+            }
+            return total
+        }
+    }
+
+    private func currentPlannedDayStreak() -> Int {
+        var streak = 0
+        var date = calendar.startOfDay(for: Date())
+        let start = calendar.startOfDay(for: habit.createdAt)
+
+        while date >= start {
+            if isPlanned(on: date) {
+                guard entry(on: date)?.status == .done else { break }
+                streak += 1
+            }
+            guard let previous = calendar.date(byAdding: .day, value: -1, to: date) else { break }
+            date = previous
+        }
+
+        return streak
+    }
+
+    private func currentSuccessfulWeekStreak() -> Int {
+        var streak = 0
+        var weekStart = calendar.startOfWeek(for: Date())
+        let firstWeekStart = calendar.startOfWeek(for: habit.createdAt)
+
+        while weekStart >= firstWeekStart {
+            let weekEnd = calendar.date(byAdding: .day, value: 6, to: weekStart) ?? weekStart
+            let done = doneEntries.filter {
+                let date = calendar.startOfDay(for: $0.entryDate)
+                return date >= weekStart && date <= min(weekEnd, calendar.startOfDay(for: Date()))
+            }.count
+            guard done >= min(max(habit.weeklyTarget, 1), 7) else { break }
+            streak += 1
+            guard let previousWeek = calendar.date(byAdding: .day, value: -7, to: weekStart) else { break }
+            weekStart = previousWeek
+        }
+
+        return streak
+    }
+
+    private func isPlanned(on date: Date) -> Bool {
+        guard calendar.startOfDay(for: date) >= calendar.startOfDay(for: habit.createdAt) else { return false }
+        switch habit.scheduleMode {
+        case .days:
+            return habit.scheduledWeekdays.contains(calendar.mondayWeekdayIndex(for: date))
+        case .count:
+            return true
+        }
+    }
+
+    private func entry(on date: Date) -> HabitEntry? {
+        let normalizedDate = calendar.startOfDay(for: date)
+        return activeEntries.first {
+            calendar.isDate($0.entryDate, inSameDayAs: normalizedDate)
+        }
+    }
+
+    private func dates(from startDate: Date, through endDate: Date) -> [Date] {
+        guard startDate <= endDate else { return [] }
+        var result: [Date] = []
+        var date = calendar.startOfDay(for: startDate)
+        let end = calendar.startOfDay(for: endDate)
+        while date <= end {
+            result.append(date)
+            guard let next = calendar.date(byAdding: .day, value: 1, to: date) else { break }
+            date = next
+        }
+        return result
+    }
+
+    private func formatted(_ date: Date, pattern: String) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ru_RU")
+        formatter.dateFormat = pattern
+        return formatter.string(from: date)
+    }
+
+    private func timesWord(_ value: Int) -> String {
+        let last = value % 10
+        let lastTwo = value % 100
+        if last == 1 && lastTwo != 11 { return "раз" }
+        if (2...4).contains(last) && !(12...14).contains(lastTwo) { return "раза" }
+        return "раз"
+    }
+}
+
+private struct ChallengeDetailView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let challenge: Challenge
+
+    private let calendar = Calendar.current
+
+    private var activeHabits: [Habit] {
+        challenge.habits
+            .filter { !$0.isArchived && $0.deletedAt == nil }
+            .sorted { $0.sortOrder < $1.sortOrder }
+    }
+
+    private var activeEntries: [HabitEntry] {
+        activeHabits.flatMap(\.entries).filter { $0.deletedAt == nil }
+    }
+
+    private var today: Date {
+        calendar.startOfDay(for: Date())
+    }
+
+    private var startDate: Date {
+        calendar.startOfDay(for: challenge.startDate)
+    }
+
+    private var visibleEndDate: Date {
+        challenge.isTimeless ? today : min(calendar.startOfDay(for: challenge.endDate), today)
+    }
+
+    private var hasStarted: Bool {
+        today >= startDate
+    }
+
+    private var currentWeekIndex: Int {
+        guard hasStarted else { return 0 }
+        let days = calendar.dateComponents([.day], from: startDate, to: today).day ?? 0
+        let week = max(1, days / 7 + 1)
+        return challenge.isTimeless ? week : min(max(week, 1), max(challenge.durationWeeks, 1))
+    }
+
+    private var closedWeekCount: Int {
+        guard hasStarted else { return 0 }
+        let days = calendar.dateComponents([.day], from: startDate, to: visibleEndDate).day ?? 0
+        let count = max(0, (days + 1) / 7)
+        return challenge.isTimeless ? count : min(count, max(challenge.durationWeeks, 1))
+    }
+
+    private var successfulWeeks: Int {
+        guard closedWeekCount > 0 else { return 0 }
+        return (0..<closedWeekCount).filter { isSuccessfulWeek(index: $0) }.count
+    }
+
+    private var currentWeekStats: (done: Int, required: Int) {
+        guard hasStarted else { return (0, 0) }
+        return weekStats(index: max(currentWeekIndex - 1, 0), capToToday: true)
+    }
+
+    private var totalStats: (done: Int, required: Int) {
+        guard hasStarted else { return (0, 0) }
+        let elapsedWeeks = max(currentWeekIndex, closedWeekCount)
+        return (0..<elapsedWeeks).reduce((done: 0, required: 0)) { result, index in
+            let stats = weekStats(index: index, capToToday: index == elapsedWeeks - 1)
+            return (result.done + stats.done, result.required + stats.required)
+        }
+    }
+
+    private var progressRate: Int {
+        guard totalStats.required > 0 else { return totalStats.done > 0 ? 100 : 0 }
+        let rate = Double(totalStats.done) / Double(totalStats.required)
+        return min(100, Int((rate * 100).rounded()))
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                heroPanel
+                metricsGrid
+                currentWeekPanel
+                habitStatsPanel
+
+                if !challenge.rewardText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    rewardPanel
+                }
+
+                NavigationLink {
+                    SetupChallengeView(challenge: challenge, onFinish: {
+                        dismiss()
+                    })
+                } label: {
+                    Label("Редактировать челлендж", systemImage: "pencil")
+                }
+                .buttonStyle(PrimaryButtonStyle())
+            }
+            .padding(20)
+        }
+        .background(AppPalette.paper.ignoresSafeArea())
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button("Закрыть") {
+                    dismiss()
+                }
+            }
+        }
+    }
+
+    private var heroPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                Circle()
+                    .fill(Color(hex: challenge.colorHex))
+                    .frame(width: 14, height: 14)
+                    .padding(.top, 9)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(challenge.title)
+                        .font(.system(size: 30, weight: .semibold))
+                        .foregroundStyle(AppPalette.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text(statusText)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(AppPalette.muted)
+                }
+            }
+
+            DetailProgressBar(value: progressRate, color: Color(hex: challenge.colorHex))
+        }
+        .weeklyPanelStyle()
+    }
+
+    private var metricsGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+            DetailMetricTile(title: "Неделя", value: weekValue, subtitle: weekSubtitle)
+            DetailMetricTile(title: "Успешные", value: "\(successfulWeeks)", subtitle: "из \(challenge.targetWeeks) нужных")
+            DetailMetricTile(title: "Прогресс", value: "\(progressRate)%", subtitle: "\(totalStats.done)/\(totalStats.required) отметок")
+            DetailMetricTile(title: "Привычки", value: "\(activeHabits.count)", subtitle: "в челлендже")
+        }
+    }
+
+    private var currentWeekPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Текущая неделя")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(AppPalette.muted)
+
+            HStack(alignment: .firstTextBaseline) {
+                Text("\(currentWeekStats.done)/\(currentWeekStats.required)")
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundStyle(AppPalette.ink)
+                Text("выполнений")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(AppPalette.muted)
+                Spacer()
+            }
+
+            DetailProgressBar(value: currentWeekRate, color: Color(hex: challenge.colorHex))
+        }
+        .weeklyPanelStyle()
+    }
+
+    private var habitStatsPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Привычки")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(AppPalette.muted)
+
+            if activeHabits.isEmpty {
+                Text("В челлендже пока нет активных привычек.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(AppPalette.muted)
+            } else {
+                ForEach(activeHabits, id: \.id) { habit in
+                    habitStatRow(habit)
+                }
+            }
+        }
+        .weeklyPanelStyle()
+    }
+
+    private var rewardPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Награда")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color(red: 0.451, green: 0.373, blue: 0.129))
+            Text(challenge.rewardText)
+                .font(.system(size: 15))
+                .foregroundStyle(AppPalette.ink)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .background(AppPalette.sunSoft)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(Color(red: 0.875, green: 0.800, blue: 0.537), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private func habitStatRow(_ habit: Habit) -> some View {
+        let weekIndex = max(currentWeekIndex - 1, 0)
+        let required = requiredCompletions(for: habit, weekIndex: weekIndex, capToToday: true)
+        let done = doneCount(for: habit, weekIndex: weekIndex, capToToday: true)
+
+        return HStack(spacing: 10) {
+            Circle()
+                .fill(Color(hex: challenge.colorHex))
+                .frame(width: 8, height: 8)
+
+            Text(habit.title)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(AppPalette.ink)
+                .lineLimit(2)
+
+            Spacer()
+
+            Text("\(done)/\(required)")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(done >= required && required > 0 ? AppPalette.accent : AppPalette.muted)
+        }
+        .padding(.vertical, 8)
+    }
+
+    private var statusText: String {
+        if today < startDate {
+            return "Старт \(formatted(startDate, pattern: "d MMMM yyyy"))"
+        }
+
+        if !challenge.isTimeless && today > calendar.startOfDay(for: challenge.endDate) {
+            return "Завершён \(formatted(challenge.endDate, pattern: "d MMMM yyyy"))"
+        }
+
+        if challenge.isTimeless {
+            return "Без срока окончания"
+        }
+
+        return "До \(formatted(challenge.endDate, pattern: "d MMMM yyyy"))"
+    }
+
+    private var weekValue: String {
+        guard hasStarted else { return "0" }
+        if challenge.isTimeless {
+            return "\(currentWeekIndex)"
+        }
+        return "\(currentWeekIndex)/\(max(challenge.durationWeeks, 1))"
+    }
+
+    private var weekSubtitle: String {
+        challenge.isTimeless ? "неделя челленджа" : "по сроку челленджа"
+    }
+
+    private var currentWeekRate: Int {
+        guard currentWeekStats.required > 0 else { return currentWeekStats.done > 0 ? 100 : 0 }
+        return min(100, Int((Double(currentWeekStats.done) / Double(currentWeekStats.required) * 100).rounded()))
+    }
+
+    private func isSuccessfulWeek(index: Int) -> Bool {
+        let stats = weekStats(index: index, capToToday: false)
+        return stats.required > 0 && stats.done >= stats.required
+    }
+
+    private func weekStats(index: Int, capToToday: Bool) -> (done: Int, required: Int) {
+        activeHabits.reduce((done: 0, required: 0)) { result, habit in
+            let required = requiredCompletions(for: habit, weekIndex: index, capToToday: capToToday)
+            let done = doneCount(for: habit, weekIndex: index, capToToday: capToToday)
+            return (result.done + done, result.required + required)
+        }
+    }
+
+    private func requiredCompletions(for habit: Habit, weekIndex: Int, capToToday: Bool) -> Int {
+        let range = weekRange(index: weekIndex, capToToday: capToToday)
+        let habitStart = calendar.startOfDay(for: habit.createdAt)
+        let start = max(range.start, startDate, habitStart)
+        let end = range.end
+        guard start <= end else { return 0 }
+
+        switch habit.scheduleMode {
+        case .days:
+            return dates(from: start, through: end).filter {
+                habit.scheduledWeekdays.contains(calendar.mondayWeekdayIndex(for: $0))
+            }.count
+        case .count:
+            return min(max(habit.weeklyTarget, 1), dates(from: start, through: end).count)
+        }
+    }
+
+    private func doneCount(for habit: Habit, weekIndex: Int, capToToday: Bool) -> Int {
+        let range = weekRange(index: weekIndex, capToToday: capToToday)
+        return habit.entries.filter { entry in
+            guard entry.deletedAt == nil && entry.status == .done else { return false }
+            let date = calendar.startOfDay(for: entry.entryDate)
+            return date >= range.start && date <= range.end
+        }.count
+    }
+
+    private func weekRange(index: Int, capToToday: Bool) -> (start: Date, end: Date) {
+        let weekStart = calendar.date(byAdding: .day, value: index * 7, to: startDate) ?? startDate
+        let weekEnd = calendar.date(byAdding: .day, value: 6, to: weekStart) ?? weekStart
+        let challengeEnd = challenge.isTimeless ? weekEnd : min(weekEnd, calendar.startOfDay(for: challenge.endDate))
+        let cappedEnd = capToToday ? min(challengeEnd, today) : challengeEnd
+        return (weekStart, cappedEnd)
+    }
+
+    private func dates(from startDate: Date, through endDate: Date) -> [Date] {
+        guard startDate <= endDate else { return [] }
+        var result: [Date] = []
+        var date = calendar.startOfDay(for: startDate)
+        let end = calendar.startOfDay(for: endDate)
+        while date <= end {
+            result.append(date)
+            guard let next = calendar.date(byAdding: .day, value: 1, to: date) else { break }
+            date = next
+        }
+        return result
+    }
+
+    private func formatted(_ date: Date, pattern: String) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ru_RU")
+        formatter.dateFormat = pattern
+        return formatter.string(from: date)
+    }
+}
+
+private struct DetailMetricTile: View {
+    let title: String
+    let value: String
+    let subtitle: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(AppPalette.muted)
+            Text(value)
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(AppPalette.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+            Text(subtitle)
+                .font(.system(size: 12))
+                .foregroundStyle(AppPalette.muted)
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(AppPalette.surface)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(AppPalette.line, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
+private struct DetailInfoRow: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(AppPalette.muted)
+                .frame(width: 104, alignment: .leading)
+            Text(value)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(AppPalette.ink)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+private struct DetailProgressBar: View {
+    let value: Int
+    let color: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(AppPalette.soft)
+                    Capsule()
+                        .fill(color)
+                        .frame(width: proxy.size.width * CGFloat(clampedValue) / 100)
+                }
+            }
+            .frame(height: 8)
+
+            Text("\(clampedValue)%")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(AppPalette.muted)
+        }
+    }
+
+    private var clampedValue: Int {
+        min(max(value, 0), 100)
     }
 }
 
@@ -1000,6 +1757,7 @@ private struct HabitFormView: View {
 
     let challenges: [Challenge]
     let habit: Habit?
+    let onFinish: (() -> Void)?
 
     @State private var selectedChallengeID: UUID?
     @State private var title: String
@@ -1034,16 +1792,17 @@ private struct HabitFormView: View {
         (scheduleMode == .count || !scheduledWeekdays.isEmpty)
     }
 
-    init(challenges: [Challenge], habit: Habit? = nil) {
+    init(challenges: [Challenge], habit: Habit? = nil, onFinish: (() -> Void)? = nil) {
         self.challenges = challenges
         self.habit = habit
+        self.onFinish = onFinish
 
         _selectedChallengeID = State(initialValue: habit?.challenge?.id)
         _title = State(initialValue: habit?.title ?? "Читать 20 минут")
         _note = State(initialValue: habit?.note ?? "Перед сном, без телефона рядом. Если день сложный, достаточно 10 минут.")
         _colorHex = State(initialValue: habit?.colorHex ?? HabitColor.sage.rawValue)
         _scheduleMode = State(initialValue: habit?.scheduleMode ?? .days)
-        _scheduledWeekdays = State(initialValue: habit?.scheduledWeekdays ?? [2, 4, 7])
+        _scheduledWeekdays = State(initialValue: habit?.scheduledWeekdays ?? [])
         _weeklyTarget = State(initialValue: habit?.weeklyTarget ?? 3)
 
         let reminders = Set(habit?.reminderTimes ?? ["20:00"])
@@ -1333,7 +2092,7 @@ private struct HabitFormView: View {
 
     private func segment(_ title: String, mode: HabitScheduleMode) -> some View {
         Button {
-            scheduleMode = mode
+            setScheduleMode(mode)
         } label: {
             Text(title)
                 .font(.system(size: 13, weight: .semibold))
@@ -1344,6 +2103,14 @@ private struct HabitFormView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
         .buttonStyle(.plain)
+    }
+
+    private func setScheduleMode(_ mode: HabitScheduleMode) {
+        guard scheduleMode != mode else { return }
+        scheduleMode = mode
+        if mode == .days {
+            scheduledWeekdays = []
+        }
     }
 
     private func saveHabit() {
@@ -1400,7 +2167,7 @@ private struct HabitFormView: View {
         if isNewHabit {
             AppHaptics.itemAdded()
         }
-        dismiss()
+        finish()
     }
 
     private func nextSortOrder(for challenge: Challenge?) -> Int {
@@ -1420,7 +2187,15 @@ private struct HabitFormView: View {
         Task {
             await HabitNotificationScheduler.shared.removeNotifications(forHabitID: habitID)
         }
-        dismiss()
+        finish()
+    }
+
+    private func finish() {
+        if let onFinish {
+            onFinish()
+        } else {
+            dismiss()
+        }
     }
 }
 

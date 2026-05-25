@@ -136,7 +136,7 @@ struct SyncClient {
         let changedEntries = ownedEntries.filter { wasChanged($0.updatedAt, after: changedAfter) }
         let changedHabitIDsFromEntries = Set(changedEntries.compactMap { $0.habit?.id })
         let changedHabits = ownedHabits.filter {
-            $0.challenge == nil || wasChanged($0.updatedAt, after: changedAfter) || changedHabitIDsFromEntries.contains($0.id)
+            wasChanged($0.updatedAt, after: changedAfter) || changedHabitIDsFromEntries.contains($0.id)
         }
         let changedChallengeIDsFromHabits = Set(changedHabits.compactMap { $0.challenge?.id })
         let changedChallenges = ownedChallenges.filter {
