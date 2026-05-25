@@ -52,6 +52,12 @@ struct SetupChallengeView: View {
     @Query(sort: \AppUser.createdAt)
     private var users: [AppUser]
 
+    @Query(sort: \Challenge.createdAt)
+    private var allChallenges: [Challenge]
+
+    @Query(sort: \Habit.createdAt)
+    private var allHabits: [Habit]
+
     private let challenge: Challenge?
     var onCreate: (() -> Void)?
     var onFinish: (() -> Void)?
@@ -207,6 +213,10 @@ struct SetupChallengeView: View {
                 .foregroundStyle(AppPalette.muted)
 
             colorPicker(selection: $colorHex)
+
+            if let colorReuseWarningText {
+                ColorReuseWarning(text: colorReuseWarningText)
+            }
 
             DatePicker("Старт", selection: $selectedStartDate, displayedComponents: [.date])
                 .font(.system(size: 15, weight: .semibold))
@@ -470,7 +480,7 @@ struct SetupChallengeView: View {
     }
 
     private func colorPicker(selection: Binding<String>) -> some View {
-        HStack(spacing: 8) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 32), spacing: 8)], alignment: .leading, spacing: 8) {
             ForEach(HabitColor.allCases) { color in
                 Button {
                     selection.wrappedValue = color.rawValue
@@ -493,6 +503,25 @@ struct SetupChallengeView: View {
                 .accessibilityLabel("Выбрать цвет")
             }
         }
+    }
+
+    private var colorReuseWarningText: String? {
+        let usedByChallenge = allChallenges.contains {
+            $0.deletedAt == nil &&
+            $0.id != challenge?.id &&
+            $0.colorHex.caseInsensitiveCompare(colorHex) == .orderedSame
+        }
+        let usedByStandaloneHabit = allHabits.contains {
+            $0.deletedAt == nil &&
+            $0.challenge == nil &&
+            $0.colorHex.caseInsensitiveCompare(colorHex) == .orderedSame
+        }
+
+        if usedByChallenge || usedByStandaloneHabit {
+            return "Этот цвет уже используется. Можно оставить его, но на неделе элементы будут хуже различаться."
+        }
+
+        return nil
     }
 
     private func colorDot(colorHex: String) -> some View {
@@ -692,7 +721,12 @@ struct SetupChallengeView: View {
 
         return challenge.habits
             .filter { !$0.isArchived && $0.deletedAt == nil }
-            .sorted { $0.sortOrder < $1.sortOrder }
+            .sorted {
+                if $0.sortOrder != $1.sortOrder {
+                    return $0.sortOrder < $1.sortOrder
+                }
+                return $0.createdAt < $1.createdAt
+            }
             .map(DraftHabit.init(habit:))
     }
 }

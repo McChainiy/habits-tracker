@@ -34,7 +34,12 @@ struct WeeklyDashboardView: View {
     private var activeChallenges: [Challenge] {
         challenges
             .filter { $0.deletedAt == nil }
-            .sorted { $0.startDate < $1.startDate }
+            .sorted { lhs, rhs in
+                if lhs.startDate != rhs.startDate {
+                    return lhs.startDate < rhs.startDate
+                }
+                return lhs.createdAt < rhs.createdAt
+            }
     }
 
     private var visibleChallenges: [Challenge] {
@@ -89,6 +94,8 @@ struct WeeklyDashboardView: View {
                     HabitDetailView(habit: habit, challenges: activeChallenges)
                 case .challengeDetail(let challenge):
                     ChallengeDetailView(challenge: challenge)
+                case .reorderHabits(let scope):
+                    HabitReorderSheet(scope: scope)
                 case .editHabit(let habit):
                     HabitFormView(challenges: activeChallenges, habit: habit)
                 case .editChallenge(let challenge):
@@ -267,8 +274,18 @@ struct WeeklyDashboardView: View {
                 Divider()
 
                 ForEach(visibleChallenges, id: \.id) { challenge in
-                    Button(challenge.title) {
-                        selectedFilter = .challenge(challenge.id)
+                    Menu(challenge.title) {
+                        Button {
+                            selectedFilter = .challenge(challenge.id)
+                        } label: {
+                            Label("Показать на неделе", systemImage: selectedFilter == .challenge(challenge.id) ? "checkmark.circle.fill" : "eye")
+                        }
+
+                        Button {
+                            sheet = .challengeDetail(challenge)
+                        } label: {
+                            Label("Открыть статистику", systemImage: "chart.bar")
+                        }
                     }
                 }
 
@@ -623,17 +640,25 @@ struct WeeklyDashboardView: View {
                 AppHaptics.habitSelected()
                 sheet = .habitDetail(row.habit)
             }
-            .onLongPressGesture(minimumDuration: 0.45, maximumDistance: 10, pressing: { isPressing in
+            .onLongPressGesture(minimumDuration: 0.35, maximumDistance: 12, pressing: { isPressing in
                 updateChallengePressFeedback(isPressing, for: row)
             }) {
-                guard let challenge = row.challenge else { return }
-                stopChallengePressFeedback()
-                AppHaptics.challengeSelected()
-                withAnimation(.easeInOut(duration: 0.16)) {
-                    highlightedChallengeID = challenge.id
-                }
-                sheet = .challengeDetail(challenge)
+                presentReorder(for: row)
             }
+    }
+
+    private func presentReorder(for row: WeeklyHabitRow) {
+        if let challenge = row.challenge {
+            AppHaptics.challengeSelected()
+            withAnimation(.easeInOut(duration: 0.16)) {
+                highlightedChallengeID = challenge.id
+            }
+            clearTransientChallengeHighlight(challenge.id)
+            sheet = .reorderHabits(.challenge(challenge))
+        } else {
+            AppHaptics.habitSelected()
+            sheet = .reorderHabits(.noChallenge)
+        }
     }
 
     private func updateChallengePressFeedback(_ isPressing: Bool, for row: WeeklyHabitRow) {
@@ -661,6 +686,16 @@ struct WeeklyDashboardView: View {
         challengePressFeedbackTask = nil
     }
 
+    private func clearTransientChallengeHighlight(_ challengeID: UUID) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            guard highlightedChallengeID == challengeID else { return }
+            withAnimation(.easeInOut(duration: 0.16)) {
+                highlightedChallengeID = nil
+            }
+        }
+    }
+
     private func colorHex(for row: WeeklyHabitRow) -> String {
         row.challenge?.colorHex ?? row.habit.colorHex
     }
@@ -686,10 +721,8 @@ struct WeeklyDashboardView: View {
 
         switch filter {
         case .all:
-            return (
-                rowsForChallenges(challenges, weekEnd: weekEnd) +
-                rowsForOrphanHabits(orphanHabits(forWeekEnd: weekEnd))
-            )
+            return rowsForChallenges(challenges, weekEnd: weekEnd) +
+            rowsForOrphanHabits(orphanHabits(forWeekEnd: weekEnd))
         case .challenge(let id):
             return rowsForChallenges(challenges.filter { $0.id == id }, weekEnd: weekEnd)
         case .noChallenge:
@@ -716,7 +749,7 @@ struct WeeklyDashboardView: View {
                 $0.deletedAt == nil &&
                 wasCreated($0.createdAt, by: weekEnd)
             }
-            .sorted { $0.sortOrder < $1.sortOrder }
+            .sorted(by: sortHabitsByOrder)
             .map { WeeklyHabitRow(challenge: challenge, habit: $0) }
     }
 
@@ -728,7 +761,14 @@ struct WeeklyDashboardView: View {
                 habit.deletedAt == nil &&
                 wasCreated(habit.createdAt, by: weekEnd)
             }
-            .sorted { $0.sortOrder < $1.sortOrder }
+            .sorted(by: sortHabitsByOrder)
+    }
+
+    private func sortHabitsByOrder(_ lhs: Habit, _ rhs: Habit) -> Bool {
+        if lhs.sortOrder != rhs.sortOrder {
+            return lhs.sortOrder < rhs.sortOrder
+        }
+        return lhs.createdAt < rhs.createdAt
     }
 
     private func visibleChallenges(forWeekStart weekStart: Date) -> [Challenge] {
@@ -879,6 +919,38 @@ private enum ChallengeFilter: Equatable {
     case noChallenge
 }
 
+private enum ReorderScope: Identifiable {
+    case challenge(Challenge)
+    case noChallenge
+
+    var id: String {
+        switch self {
+        case .challenge(let challenge):
+            return "challenge-\(challenge.id)"
+        case .noChallenge:
+            return "noChallenge"
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .challenge(let challenge):
+            return challenge.title
+        case .noChallenge:
+            return "Без челленджа"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .challenge:
+            return "Порядок привычек внутри челленджа"
+        case .noChallenge:
+            return "Порядок привычек без челленджа"
+        }
+    }
+}
+
 private enum MonthEntrySummary: Equatable {
     case done
     case failed
@@ -923,6 +995,7 @@ private enum DashboardSheet: Identifiable {
     case newChallenge
     case habitDetail(Habit)
     case challengeDetail(Challenge)
+    case reorderHabits(ReorderScope)
     case editHabit(Habit)
     case editChallenge(Challenge)
 
@@ -932,9 +1005,158 @@ private enum DashboardSheet: Identifiable {
         case .newChallenge: return "newChallenge"
         case .habitDetail(let habit): return "habitDetail-\(habit.id)"
         case .challengeDetail(let challenge): return "challengeDetail-\(challenge.id)"
+        case .reorderHabits(let scope): return "reorderHabits-\(scope.id)"
         case .editHabit(let habit): return "editHabit-\(habit.id)"
         case .editChallenge(let challenge): return "editChallenge-\(challenge.id)"
         }
+    }
+}
+
+private struct HabitReorderSheet: View {
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+
+    @Query(sort: \Habit.createdAt)
+    private var allHabits: [Habit]
+
+    let scope: ReorderScope
+
+    @State private var orderedHabitIDs: [UUID] = []
+
+    private var sourceHabits: [Habit] {
+        switch scope {
+        case .challenge(let challenge):
+            return allHabits
+                .filter {
+                    $0.challenge?.id == challenge.id &&
+                    !$0.isArchived &&
+                    $0.deletedAt == nil
+                }
+                .sorted(by: sortHabitsByOrder)
+        case .noChallenge:
+            return allHabits
+                .filter {
+                    $0.challenge == nil &&
+                    !$0.isArchived &&
+                    $0.deletedAt == nil
+                }
+                .sorted(by: sortHabitsByOrder)
+        }
+    }
+
+    private var orderedHabits: [Habit] {
+        let habitsByID = Dictionary(uniqueKeysWithValues: sourceHabits.map { ($0.id, $0) })
+        let sourceIDs = sourceHabits.map(\.id)
+        let ids = orderedHabitIDs.isEmpty ? sourceIDs : orderedHabitIDs
+        let ordered = ids.compactMap { habitsByID[$0] }
+        let orderedIDSet = Set(ids)
+        let missing = sourceHabits.filter { !orderedIDSet.contains($0.id) }
+        return ordered + missing.sorted(by: sortHabitsByOrder)
+    }
+
+    var body: some View {
+        List {
+            Section {
+                if orderedHabits.isEmpty {
+                    ContentUnavailableView(
+                        "Нет привычек",
+                        systemImage: "list.bullet",
+                        description: Text("В этой группе пока нечего сортировать.")
+                    )
+                    .listRowBackground(AppPalette.surface)
+                } else {
+                    ForEach(orderedHabits, id: \.id) { habit in
+                        habitRow(habit)
+                    }
+                    .onMove(perform: moveHabits)
+                }
+            } header: {
+                Text(scope.subtitle)
+            }
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(AppPalette.paper.ignoresSafeArea())
+        .environment(\.editMode, .constant(.active))
+        .navigationTitle(scope.title)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button("Готово") {
+                    dismiss()
+                }
+            }
+        }
+        .onAppear {
+            orderedHabitIDs = sourceHabits.map(\.id)
+        }
+        .onChange(of: sourceHabits.map(\.id)) { _, ids in
+            syncOrderedIDs(with: ids)
+        }
+    }
+
+    private func habitRow(_ habit: Habit) -> some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(Color(hex: habit.challenge?.colorHex ?? habit.colorHex))
+                .frame(width: 12, height: 12)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(habit.title)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(AppPalette.ink)
+
+                if !habit.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(habit.note)
+                        .font(.system(size: 13))
+                        .foregroundStyle(AppPalette.muted)
+                        .lineLimit(1)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+        .listRowBackground(AppPalette.surface)
+    }
+
+    private func moveHabits(from source: IndexSet, to destination: Int) {
+        var ids = orderedHabits.map(\.id)
+        ids.move(fromOffsets: source, toOffset: destination)
+        orderedHabitIDs = ids
+        applyOrder(ids)
+    }
+
+    private func applyOrder(_ ids: [UUID]) {
+        let habitsByID = Dictionary(uniqueKeysWithValues: sourceHabits.map { ($0.id, $0) })
+        var didChange = false
+
+        for (index, id) in ids.enumerated() {
+            guard let habit = habitsByID[id], habit.sortOrder != index else { continue }
+            habit.sortOrder = index
+            habit.touch()
+            didChange = true
+        }
+
+        guard didChange else { return }
+        if case .challenge(let challenge) = scope {
+            challenge.touch()
+        }
+        try? modelContext.save()
+    }
+
+    private func syncOrderedIDs(with sourceIDs: [UUID]) {
+        let sourceIDSet = Set(sourceIDs)
+        var synced = orderedHabitIDs.filter { sourceIDSet.contains($0) }
+        for id in sourceIDs where !synced.contains(id) {
+            synced.append(id)
+        }
+        orderedHabitIDs = synced
+    }
+
+    private func sortHabitsByOrder(_ lhs: Habit, _ rhs: Habit) -> Bool {
+        if lhs.sortOrder != rhs.sortOrder {
+            return lhs.sortOrder < rhs.sortOrder
+        }
+        return lhs.createdAt < rhs.createdAt
     }
 }
 
@@ -1267,7 +1489,12 @@ private struct ChallengeDetailView: View {
     private var activeHabits: [Habit] {
         challenge.habits
             .filter { !$0.isArchived && $0.deletedAt == nil }
-            .sorted { $0.sortOrder < $1.sortOrder }
+            .sorted {
+                if $0.sortOrder != $1.sortOrder {
+                    return $0.sortOrder < $1.sortOrder
+                }
+                return $0.createdAt < $1.createdAt
+            }
     }
 
     private var activeEntries: [HabitEntry] {
@@ -1759,6 +1986,9 @@ private struct HabitFormView: View {
     let habit: Habit?
     let onFinish: (() -> Void)?
 
+    @Query(sort: \Habit.createdAt)
+    private var allHabits: [Habit]
+
     @State private var selectedChallengeID: UUID?
     @State private var title: String
     @State private var note: String
@@ -1916,6 +2146,9 @@ private struct HabitFormView: View {
             } else {
                 labeledField("Цвет") {
                     colorPicker
+                    if let colorReuseWarningText {
+                        ColorReuseWarning(text: colorReuseWarningText)
+                    }
                 }
             }
         }
@@ -2033,7 +2266,7 @@ private struct HabitFormView: View {
     }
 
     private var colorPicker: some View {
-        HStack(spacing: 8) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 32), spacing: 8)], alignment: .leading, spacing: 8) {
             ForEach(HabitColor.allCases) { color in
                 Button {
                     colorHex = color.rawValue
@@ -2051,6 +2284,27 @@ private struct HabitFormView: View {
                 .buttonStyle(.plain)
             }
         }
+    }
+
+    private var colorReuseWarningText: String? {
+        guard selectedChallenge == nil else { return nil }
+
+        let usedByStandaloneHabit = allHabits.contains {
+            $0.deletedAt == nil &&
+            $0.challenge == nil &&
+            $0.id != habit?.id &&
+            $0.colorHex.caseInsensitiveCompare(colorHex) == .orderedSame
+        }
+        let usedByChallenge = challenges.contains {
+            $0.deletedAt == nil &&
+            $0.colorHex.caseInsensitiveCompare(colorHex) == .orderedSame
+        }
+
+        if usedByStandaloneHabit || usedByChallenge {
+            return "Этот цвет уже используется. Можно оставить его, но на неделе элементы будут хуже различаться."
+        }
+
+        return nil
     }
 
     private var weekdayPicker: some View {
@@ -2174,7 +2428,10 @@ private struct HabitFormView: View {
         if let challenge {
             return (challenge.habits.map(\.sortOrder).max() ?? -1) + 1
         }
-        return 0
+        return (allHabits
+            .filter { $0.challenge == nil && !$0.isArchived && $0.deletedAt == nil }
+            .map(\.sortOrder)
+            .max() ?? -1) + 1
     }
 
     private func deleteHabit() {

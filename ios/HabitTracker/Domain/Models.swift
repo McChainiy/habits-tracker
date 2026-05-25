@@ -29,6 +29,12 @@ enum HabitColor: String, CaseIterable, Identifiable {
     case stone = "#8B8C83"
     case ink = "#60717A"
     case moss = "#75815A"
+    case coral = "#C95F55"
+    case berry = "#B45C7D"
+    case teal = "#2F9086"
+    case leaf = "#4F9A62"
+    case indigo = "#6D75C9"
+    case amber = "#D08A2E"
 
     var id: String { rawValue }
 }
@@ -126,6 +132,7 @@ final class Challenge {
     var targetWeeks: Int = 3
     var isTimeless: Bool = false
     var rewardText: String = ""
+    var sortOrder: Int = 0
     var statusRawValue: String
     var createdAt: Date
     var updatedAt: Date
@@ -148,6 +155,7 @@ final class Challenge {
         targetWeeks: Int = 3,
         isTimeless: Bool = false,
         rewardText: String = "",
+        sortOrder: Int = 0,
         status: ChallengeStatus = .active,
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
@@ -165,6 +173,7 @@ final class Challenge {
         self.targetWeeks = targetWeeks
         self.isTimeless = isTimeless
         self.rewardText = rewardText
+        self.sortOrder = sortOrder
         self.statusRawValue = status.rawValue
         self.createdAt = createdAt
         self.updatedAt = updatedAt
